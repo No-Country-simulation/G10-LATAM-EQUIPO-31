@@ -20,6 +20,7 @@ langgraph==1.2.11
 # Proveedores LLM
 google-genai==2.24.0
 
+
 # OCI Object Storage
 oci==2.186.0
 
