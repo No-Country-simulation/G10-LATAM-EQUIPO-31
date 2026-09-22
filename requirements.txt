@@ -1,0 +1,27 @@
+# MediFlow - Entorno base
+# Python 3.11
+
+# API / Ingesta
+fastapi==0.141.1
+uvicorn[standard]
+python-multipart==0.0.32
+
+# Interfaz
+streamlit==1.64.0
+
+# Validacion / Configuracion
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
+
+# Orquestacion
+langgraph==1.2.11
+
+# Proveedores LLM
+google-genai==2.24.0
+
+# OCI Object Storage
+oci==2.186.0
+
+# HTTP
+httpx==0.28.1
