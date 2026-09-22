@@ -14,6 +14,13 @@ o que no cumple el schema. Si se agotan los intentos, no se lanza excepción:
 se devuelve una extracción "vacía" con campos_no_encontrados lleno, para
 que la etapa de "Evaluación de confianza y consistencia" decida enviarlo
 a revisión humana.
+
+Fallback técnico (según diagrama de arquitectura del equipo): si el
+proveedor principal falla por un error técnico (429/cuota, timeout, 5xx —
+no por un JSON mal formado), se cambia automáticamente a `proveedor_fallback`
+si se proporcionó uno. Cuál es el LLM alternativo queda pendiente de
+confirmar con el equipo (tarea abierta de Kimberlyn); mientras tanto,
+`proveedor_fallback` es opcional y el extractor sigue funcionando sin él.
 """
 
 from __future__ import annotations
@@ -50,6 +57,19 @@ class ProveedorLLM(Protocol):
     """
 
     def generar(self, prompt_sistema: str, prompt_usuario: str) -> str: ...
+
+
+class ErrorTecnicoProveedor(Exception):
+    """
+    Excepción que un ProveedorLLM concreto puede lanzar para señalar un
+    fallo técnico (429/cuota, timeout, 5xx/indisponibilidad) en lugar de
+    un error de contenido. El extractor la usa para decidir si vale la
+    pena reintentar con el mismo proveedor o saltar directo al fallback.
+
+    Si tu proveedor (ej. ProveedorGemini) no distingue esto, no pasa nada:
+    el extractor sigue funcionando, simplemente no podrá diferenciar un
+    fallo técnico de uno de contenido y agotará los reintentos igual.
+    """
 
 
 class ResultadoClasificacionMock:
@@ -130,41 +150,82 @@ def _extraccion_vacia(clasificacion: Any, motivo: str) -> ExtraccionClinica:
     )
 
 
-def extraer_datos_clinicos(
-    texto_documento: str,
-    clasificacion: Any,
+def _intentar_con_proveedor(
     proveedor: ProveedorLLM,
-) -> ExtraccionClinica:
+    prompt_sistema: str,
+    prompt_usuario: str,
+    etiqueta: str,
+    errores: list[str],
+) -> ExtraccionClinica | None:
     """
-    Punto de entrada principal del Agente Extractor.
-
-    texto_documento: contenido ya en texto plano/Markdown del documento
-        (se asume que la conversión de PDF/imagen, si aplica, ya ocurrió
-        antes de esta función — pendiente de confirmar con el equipo).
-    clasificacion: salida del Agente Clasificador (MF-05) — o
-        ResultadoClasificacionMock para pruebas aisladas. Debe tener al
-        menos `.tipo_documento` y `.especialidad`.
-    proveedor: cliente concreto del LLM que implemente `.generar(...)`.
+    Intenta hasta MAX_INTENTOS veces con UN proveedor. Devuelve el resultado
+    validado si tiene éxito, o None si hay que pasar al fallback (fallo
+    técnico) o se agotaron los intentos por errores de formato.
     """
-    prompt_sistema, prompt_usuario = _construir_prompt(texto_documento, clasificacion)
-
-    errores: list[str] = []
     for intento in range(1, MAX_INTENTOS + 1):
         try:
             respuesta = proveedor.generar(prompt_sistema, prompt_usuario)
+        except ErrorTecnicoProveedor as exc:
+            mensaje = f"[{etiqueta}] intento {intento}/{MAX_INTENTOS}: fallo técnico ({exc})"
+            logger.warning(mensaje)
+            errores.append(mensaje)
+            return None  # no insistir con el mismo proveedor si ya sabemos que es técnico
+
+        try:
             datos_json = _extraer_json(respuesta)
             resultado = ExtraccionClinica.model_validate(datos_json)
             logger.info(
-                "Extracción completada en intento %s/%s (%s campos no encontrados).",
+                "Extracción completada con [%s] en intento %s/%s (%s campos no encontrados).",
+                etiqueta,
                 intento,
                 MAX_INTENTOS,
                 len(resultado.campos_no_encontrados),
             )
             return resultado
         except (json.JSONDecodeError, ValidationError) as exc:
-            mensaje = f"Intento {intento}/{MAX_INTENTOS}: salida inválida ({exc})"
+            mensaje = f"[{etiqueta}] intento {intento}/{MAX_INTENTOS}: salida inválida ({exc})"
             logger.warning(mensaje)
             errores.append(mensaje)
 
-    logger.error("Se agotaron %s intentos; devolviendo extracción vacía.", MAX_INTENTOS)
+    return None
+
+
+def extraer_datos_clinicos(
+    texto_documento: str,
+    clasificacion: Any,
+    proveedor: ProveedorLLM,
+    proveedor_fallback: ProveedorLLM | None = None,
+) -> ExtraccionClinica:
+    """
+    Punto de entrada principal del Agente Extractor.
+
+    texto_documento: contenido ya en texto plano/Markdown del documento
+        (se asume que la conversión de PDF/imagen, si aplica, ya ocurrió
+        antes de esta función — pendiente de confirmar con el equipo, ya
+        que el diagrama de arquitectura habla de un LLM "multimodal", lo
+        que podría significar enviar el documento directo, sin este paso).
+    clasificacion: salida del Agente Clasificador (MF-05) — o
+        ResultadoClasificacionMock para pruebas aisladas. Debe tener al
+        menos `.tipo_documento` y `.especialidad`.
+    proveedor: cliente concreto del LLM principal que implemente `.generar(...)`.
+    proveedor_fallback: cliente del LLM alternativo (opcional). Se usa solo
+        si `proveedor` falla por un ErrorTecnicoProveedor. Cuál LLM usar
+        aquí es una decisión pendiente del equipo.
+    """
+    prompt_sistema, prompt_usuario = _construir_prompt(texto_documento, clasificacion)
+    errores: list[str] = []
+
+    resultado = _intentar_con_proveedor(proveedor, prompt_sistema, prompt_usuario, "principal", errores)
+    if resultado is not None:
+        return resultado
+
+    if proveedor_fallback is not None:
+        logger.warning("Proveedor principal no respondió correctamente; probando fallback.")
+        resultado = _intentar_con_proveedor(
+            proveedor_fallback, prompt_sistema, prompt_usuario, "fallback", errores
+        )
+        if resultado is not None:
+            return resultado
+
+    logger.error("Se agotaron todos los proveedores disponibles; devolviendo extracción vacía.")
     return _extraccion_vacia(clasificacion, "; ".join(errores))
