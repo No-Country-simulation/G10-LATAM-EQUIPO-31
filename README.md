@@ -12,7 +12,7 @@ Proyecto desarrollado para el Hackathon ONE G10 (Oracle Next Education & Alura).
 
 ## Objetivo del proyecto
 
-Reducir el tiempo y los errores del procesamiento manual de documentos clínicos en hospitales, laboratorios y aseguradoras de salud, mediante un pipeline automatizado de clasificación, extracción y enrutamiento, con revisión humana (Human-in-the-Loop) para los casos ambiguos o urgentes.
+Reducir el tiempo y los errores del procesamiento manual de documentos clínicos en hospitales, laboratorios y aseguradoras de salud, mediante un pipeline automatizado de clasificación, extracción y enrutamiento, con revisión humana (Human-in-the-Loop) para los casos ambiguos, inconsistentes o de baja confianza.
 
 ## Arquitectura aprobada
 
