@@ -9,15 +9,14 @@ contra `ExtraccionClinica` (app/schemas/extraccion_schema.py — borrador
 propio mientras MF-02 entrega el schema definitivo acordado con el resto
 de agentes del grafo).
 
-Política de reintento: hasta MAX_INTENTOS si el LLM devuelve JSON inválido
-o que no cumple el schema. Si se agotan los intentos, no se lanza excepción:
-se devuelve una extracción "vacía" con campos_no_encontrados lleno, para
-que la etapa de "Evaluación de confianza y consistencia" decida enviarlo
-a revisión humana.
+Política de reintento: hasta MAX_INTENTOS si el LLM devuelve JSON inválido,
+no cumple el schema, o el proveedor falla técnicamente (429/cuota, timeout,
+5xx). Si se agotan los intentos, no se lanza excepción: se devuelve una
+extracción "vacía" con campos_no_encontrados lleno, para que la etapa de
+"Evaluación de confianza y consistencia" decida enviarlo a revisión humana.
 
 Fallback técnico (según diagrama de arquitectura del equipo): si el
-proveedor principal falla por un error técnico (429/cuota, timeout, 5xx —
-no por un JSON mal formado), se cambia automáticamente a `proveedor_fallback`
+proveedor principal agota sus reintentos, se cambia a `proveedor_fallback`
 si se proporcionó uno. Cuál es el LLM alternativo queda pendiente de
 confirmar con el equipo (tarea abierta de Kimberlyn); mientras tanto,
 `proveedor_fallback` es opcional y el extractor sigue funcionando sin él.
@@ -63,21 +62,14 @@ class ErrorTecnicoProveedor(Exception):
     """
     Excepción que un ProveedorLLM concreto puede lanzar para señalar un
     fallo técnico (429/cuota, timeout, 5xx/indisponibilidad) en lugar de
-    un error de contenido. El extractor la usa para decidir si vale la
-    pena reintentar con el mismo proveedor o saltar directo al fallback.
-
-    Si tu proveedor (ej. ProveedorGemini) no distingue esto, no pasa nada:
-    el extractor sigue funcionando, simplemente no podrá diferenciar un
-    fallo técnico de uno de contenido y agotará los reintentos igual.
+    un error de contenido.
     """
 
 
 class ResultadoClasificacionMock:
     """
     Sustituto mínimo de lo que entregará el Agente Clasificador (MF-05).
-    Solo se usa para poder probar el extractor de forma aislada; el campo
-    real que llegue del grafo probablemente tenga esta misma forma o muy
-    parecida (confirmar con quien tenga esa tarjeta).
+    Solo se usa para poder probar el extractor de forma aislada.
     """
 
     def __init__(self, tipo_documento: str, especialidad: str | None = None):
@@ -133,6 +125,41 @@ def _construir_prompt(texto_documento: str, clasificacion: Any) -> tuple[str, st
     return prompt_sistema, prompt_usuario
 
 
+def _calcular_campos_no_encontrados(resultado: ExtraccionClinica) -> list[str]:
+    """
+    Revisa el resultado YA VALIDADO y determina, por código (no confiando
+    en lo que el LLM haya reportado por su cuenta), cuáles de los campos
+    mínimos esperados quedaron vacíos.
+    """
+    faltantes: list[str] = []
+    if not resultado.paciente.nombre_completo:
+        faltantes.append("paciente.nombre_completo")
+    if not resultado.paciente.numero_documento:
+        faltantes.append("paciente.numero_documento")
+    if not resultado.profesional.nombre_completo:
+        faltantes.append("profesional.nombre_completo")
+    if not resultado.diagnosticos:
+        faltantes.append("diagnosticos")
+    return faltantes
+
+
+def _normalizar_resultado(resultado: ExtraccionClinica, clasificacion: Any) -> ExtraccionClinica:
+    """
+    Se aplica a todo resultado exitoso antes de devolverlo:
+    - tipo_documento / especialidad SIEMPRE vienen de la clasificación
+      (Agente 1), nunca de lo que el LLM haya devuelto en esos campos.
+    - campos_no_encontrados se recalcula por código en vez de confiar
+      ciegamente en la lista que reportó el LLM.
+    """
+    resultado.tipo_documento = clasificacion.tipo_documento
+    resultado.especialidad = clasificacion.especialidad
+
+    calculados = _calcular_campos_no_encontrados(resultado)
+    combinados = list(dict.fromkeys([*resultado.campos_no_encontrados, *calculados]))
+    resultado.campos_no_encontrados = combinados
+    return resultado
+
+
 def _extraccion_vacia(clasificacion: Any, motivo: str) -> ExtraccionClinica:
     """Salida degradada cuando se agotan los reintentos: nunca se lanza excepción."""
     return ExtraccionClinica(
@@ -156,24 +183,40 @@ def _intentar_con_proveedor(
     prompt_usuario: str,
     etiqueta: str,
     errores: list[str],
+    clasificacion: Any,
 ) -> ExtraccionClinica | None:
     """
     Intenta hasta MAX_INTENTOS veces con UN proveedor. Devuelve el resultado
-    validado si tiene éxito, o None si hay que pasar al fallback (fallo
-    técnico) o se agotaron los intentos por errores de formato.
+    validado si tiene éxito, o None si hay que pasar al fallback o se
+    agotaron los intentos.
     """
     for intento in range(1, MAX_INTENTOS + 1):
         try:
             respuesta = proveedor.generar(prompt_sistema, prompt_usuario)
         except ErrorTecnicoProveedor as exc:
+            # Se reintenta con el MISMO proveedor (un timeout/429 puntual
+            # puede ser transitorio); solo se pasa al fallback cuando se
+            # agotan los MAX_INTENTOS.
             mensaje = f"[{etiqueta}] intento {intento}/{MAX_INTENTOS}: fallo técnico ({exc})"
             logger.warning(mensaje)
             errores.append(mensaje)
-            return None  # no insistir con el mismo proveedor si ya sabemos que es técnico
+            continue
+        except Exception as exc:
+            # Red de seguridad: cualquier error que el proveedor NO haya
+            # traducido a ErrorTecnicoProveedor cae aquí. Nunca debe
+            # escaparse una excepción fuera de este módulo.
+            mensaje = (
+                f"[{etiqueta}] intento {intento}/{MAX_INTENTOS}: "
+                f"error inesperado del proveedor ({type(exc).__name__}: {exc})"
+            )
+            logger.warning(mensaje)
+            errores.append(mensaje)
+            continue
 
         try:
             datos_json = _extraer_json(respuesta)
             resultado = ExtraccionClinica.model_validate(datos_json)
+            resultado = _normalizar_resultado(resultado, clasificacion)
             logger.info(
                 "Extracción completada con [%s] en intento %s/%s (%s campos no encontrados).",
                 etiqueta,
@@ -199,30 +242,25 @@ def extraer_datos_clinicos(
     """
     Punto de entrada principal del Agente Extractor.
 
-    texto_documento: contenido ya en texto plano/Markdown del documento
-        (se asume que la conversión de PDF/imagen, si aplica, ya ocurrió
-        antes de esta función — pendiente de confirmar con el equipo, ya
-        que el diagrama de arquitectura habla de un LLM "multimodal", lo
-        que podría significar enviar el documento directo, sin este paso).
+    texto_documento: contenido ya en texto plano/Markdown del documento.
     clasificacion: salida del Agente Clasificador (MF-05) — o
-        ResultadoClasificacionMock para pruebas aisladas. Debe tener al
-        menos `.tipo_documento` y `.especialidad`.
-    proveedor: cliente concreto del LLM principal que implemente `.generar(...)`.
-    proveedor_fallback: cliente del LLM alternativo (opcional). Se usa solo
-        si `proveedor` falla por un ErrorTecnicoProveedor. Cuál LLM usar
-        aquí es una decisión pendiente del equipo.
+        ResultadoClasificacionMock para pruebas aisladas.
+    proveedor: cliente concreto del LLM principal.
+    proveedor_fallback: cliente del LLM alternativo (opcional).
     """
     prompt_sistema, prompt_usuario = _construir_prompt(texto_documento, clasificacion)
     errores: list[str] = []
 
-    resultado = _intentar_con_proveedor(proveedor, prompt_sistema, prompt_usuario, "principal", errores)
+    resultado = _intentar_con_proveedor(
+        proveedor, prompt_sistema, prompt_usuario, "principal", errores, clasificacion
+    )
     if resultado is not None:
         return resultado
 
     if proveedor_fallback is not None:
         logger.warning("Proveedor principal no respondió correctamente; probando fallback.")
         resultado = _intentar_con_proveedor(
-            proveedor_fallback, prompt_sistema, prompt_usuario, "fallback", errores
+            proveedor_fallback, prompt_sistema, prompt_usuario, "fallback", errores, clasificacion
         )
         if resultado is not None:
             return resultado
