@@ -26,3 +26,6 @@ oci==2.186.0
 
 # HTTP
 httpx==0.28.1
+
+# Testing
+pytest==8.3.4
