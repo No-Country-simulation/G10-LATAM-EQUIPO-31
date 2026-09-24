@@ -1,0 +1,8 @@
+INFORME DE ESTUDIO POR IMAGENES (dato sintetico, uso interno de pruebas)
+
+Paciente: Juan Perez (ficticio)
+Medico solicitante: Dra. Maria Gomez
+Estudio realizado: Tomografia de torax
+Motivo de consulta: sospecha de embolia pulmonar
+Hallazgo: hallazgo compatible con TEP (tromboembolismo pulmonar) agudo en
+arteria pulmonar derecha. Se recomienda evaluacion urgente por neumologia.

@@ -60,6 +60,8 @@ G10-LATAM-EQUIPO-31/
 └── README.md
 ```
 
+`app/services/oci_storage_service.py` — servicio de conexión con OCI Object Storage (carga y recuperación de documentos), implementado y probado en MF-04.
+
 ## Configuración inicial del entorno
 
 1. Verificar que tenés Python 3.11 instalado.
