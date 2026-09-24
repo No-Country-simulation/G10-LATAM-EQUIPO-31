@@ -1,0 +1,59 @@
+{
+  "status": "procesado",
+  "documento_id": "DOC-INFORME-002",
+  "clasificacion": {
+    "tipo_documento": "Informe de Estudio de Diagnostico por Imagenes/Laboratorio",
+    "especialidad": "Radiología / Neumología",
+    "nivel_prioridad": "Urgente",
+    "score_confianza_clasificacion": 0.95,
+    "justificacion": "El documento corresponde a un informe de estudio diagnóstico por imágenes."
+  },
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Miguel Ángel Torres",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 63,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dra. Patricia Gómez",
+      "registro_profesional": "MP-78214",
+      "especialidad": null,
+      "institucion": "CENTRO MÉDICO VIDA"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Tromboembolismo pulmonar agudo",
+        "codigo_cie10": "I26.9",
+        "tipo": null
+      }
+    ],
+    "medicamentos": [],
+    "estudios_solicitados": [
+      {
+        "tipo": "Tomografía computarizada",
+        "descripcion": "Tomografía computarizada de tórax con contraste",
+        "prioridad": null
+      }
+    ],
+    "procedimientos_solicitados": [],
+    "nivel_urgencia": "urgente",
+    "senales_gravedad": [
+      "Se observa defecto de llenado en arterias pulmonares segmentarias, compatible con tromboembolismo pulmonar agudo."
+    ],
+    "fecha_documento": null,
+    "observaciones": null,
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "profesional.especialidad",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  }
+}

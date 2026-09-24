@@ -1,0 +1,56 @@
+{
+  "status": "procesado",
+  "documento_id": "DOC-PROCEDIMIENTO-JPG-008",
+  "clasificacion": {
+    "tipo_documento": "Orden de Solicitud de Procedimiento",
+    "especialidad": "Cirugía General",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 0.95,
+    "justificacion": "El documento corresponde a una orden de solicitud de procedimiento."
+  },
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Daniela Rodríguez Pérez",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 38,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dr. Felipe Mendoza",
+      "registro_profesional": "MP-61347",
+      "especialidad": null,
+      "institucion": "HOSPITAL SANTA MARÍA"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Colelitiasis sin colecistitis",
+        "codigo_cie10": "K80.2",
+        "tipo": null
+      }
+    ],
+    "medicamentos": [],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [
+      {
+        "descripcion": "Colecistectomía laparoscópica",
+        "prioridad": null
+      }
+    ],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [],
+    "fecha_documento": null,
+    "observaciones": "Programar valoración prequirúrgica antes del procedimiento.",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "profesional.especialidad",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  }
+}
