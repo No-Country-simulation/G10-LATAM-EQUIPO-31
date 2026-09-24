@@ -1,39 +1,60 @@
 {
+  "status": "procesado",
   "documento_id": "DOC-EPICRISIS-004",
-  "tipo_documento": "Epicrisis / Informe de Alta",
-  "paciente": {
-    "nombre_completo": "José Antonio Herrera",
-    "edad": 67
+  "clasificacion": {
+    "tipo_documento": "Epicrisis / Informe de Alta",
+    "especialidad": "Medicina Interna",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 0.95,
+    "justificacion": "El documento corresponde a una epicrisis o informe de alta."
   },
-  "profesional": {
-    "nombre_completo": "Dra. Carolina Méndez",
-    "registro_profesional": "MP-52981",
-    "institucion": "HOSPITAL CENTRAL"
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "José Antonio Herrera",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 67,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dra. Carolina Méndez",
+      "registro_profesional": "MP-52981",
+      "especialidad": null,
+      "institucion": "HOSPITAL CENTRAL"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Neumonía bacteriana",
+        "codigo_cie10": "J15.9",
+        "tipo": null
+      }
+    ],
+    "medicamentos": [
+      {
+        "nombre": "Amoxicilina con ácido clavulánico",
+        "dosis": "875/125 mg",
+        "via_administracion": null,
+        "frecuencia": "cada 12 horas",
+        "duracion": "7 días"
+      }
+    ],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [],
+    "fecha_documento": null,
+    "observaciones": "Fecha de ingreso: 15/09/2026. Fecha de alta: 18/09/2026. Paciente ingresó por fiebre, tos productiva y dificultad respiratoria. Durante la hospitalización presentó evolución clínica favorable luego del tratamiento indicado. Indicaciones: Continuar tratamiento en domicilio. Control por Medicina Interna en 7 días. Acudir a urgencias ante dificultad respiratoria o fiebre persistente.",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "profesional.especialidad",
+      "medicamentos[0].via_administracion",
+      "fecha_documento"
+    ]
   },
-  "diagnosticos": [
-    {
-      "descripcion": "Neumonía bacteriana",
-      "codigo_cie10": "J15.9"
-    }
-  ],
-  "medicamentos": [
-    {
-      "nombre": "Amoxicilina con ácido clavulánico",
-      "dosis": "875/125 mg",
-      "frecuencia": "cada 12 horas",
-      "duracion": "7 días"
-    }
-  ],
-  "estudios": [],
-  "procedimientos": [],
-  "especialidad": "Medicina Interna",
-  "prioridad": "Rutina",
-  "fecha_ingreso": "15/09/2026",
-  "fecha_alta": "18/09/2026",
-  "resumen_clinico": "Paciente ingresó por fiebre, tos productiva y dificultad respiratoria. Durante la hospitalización presentó evolución clínica favorable luego del tratamiento indicado.",
-  "indicaciones": [
-    "Continuar tratamiento en domicilio.",
-    "Control por Medicina Interna en 7 días.",
-    "Acudir a urgencias ante dificultad respiratoria o fiebre persistente."
-  ]
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  }
 }

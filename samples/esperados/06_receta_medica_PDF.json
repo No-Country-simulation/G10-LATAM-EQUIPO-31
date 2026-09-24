@@ -1,41 +1,68 @@
 {
+  "status": "procesado",
   "documento_id": "DOC-RECETA-PDF-006",
-  "tipo_documento": "Receta Medica",
-  "paciente": {
-    "nombre_completo": "Laura Martínez Gómez",
-    "edad": 45
+  "clasificacion": {
+    "tipo_documento": "Receta Medica",
+    "especialidad": "Medicina General",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 0.95,
+    "justificacion": "El documento se identifica explícitamente como una receta médica y contiene medicamentos prescritos."
   },
-  "profesional": {
-    "nombre_completo": "Dr. Andrés Ramírez",
-    "registro_profesional": "MP-45821",
-    "institucion": "CLÍNICA SAN GABRIEL"
-  },
-  "diagnosticos": [
-    {
-      "descripcion": "Hipertensión arterial esencial",
-      "codigo_cie10": "I10"
-    }
-  ],
-  "medicamentos": [
-    {
-      "nombre": "Losartán",
-      "dosis": "50 mg",
-      "frecuencia": "cada 12 horas",
-      "duracion": "30 días"
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Laura Martínez Gómez",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 45,
+      "sexo": null
     },
-    {
-      "nombre": "Amlodipino",
-      "dosis": "5 mg",
-      "frecuencia": "cada 24 horas",
-      "duracion": "30 días"
-    }
-  ],
-  "estudios": [],
-  "procedimientos": [],
-  "especialidad": null,
-  "prioridad": "Rutina",
-  "indicaciones": [
-    "Continuar control de presión arterial.",
-    "Asistir a consulta de seguimiento."
-  ]
+    "profesional": {
+      "nombre_completo": "Dr. Andrés Ramírez",
+      "registro_profesional": "MP-45821",
+      "especialidad": null,
+      "institucion": "CLÍNICA SAN GABRIEL"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Hipertensión arterial esencial",
+        "codigo_cie10": "I10",
+        "tipo": null
+      }
+    ],
+    "medicamentos": [
+      {
+        "nombre": "Losartán",
+        "dosis": "50 mg",
+        "via_administracion": null,
+        "frecuencia": "cada 12 horas",
+        "duracion": "30 días"
+      },
+      {
+        "nombre": "Amlodipino",
+        "dosis": "5 mg",
+        "via_administracion": null,
+        "frecuencia": "cada 24 horas",
+        "duracion": "30 días"
+      }
+    ],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [],
+    "fecha_documento": null,
+    "observaciones": "Continuar control de presión arterial y asistir a consulta de seguimiento.",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "profesional.especialidad",
+      "medicamentos[0].via_administracion",
+      "medicamentos[1].via_administracion",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  }
 }

@@ -1,29 +1,51 @@
 {
+  "status": "procesado",
   "documento_id": "DOC-CERTIFICADO-005",
-  "tipo_documento": "Certificado Medico",
-  "paciente": {
-    "nombre_completo": "Valentina Gómez Ruiz",
-    "edad": 29
+  "clasificacion": {
+    "tipo_documento": "Certificado Medico",
+    "especialidad": "Medicina General",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 0.95,
+    "justificacion": "El documento corresponde a un certificado médico."
   },
-  "profesional": {
-    "nombre_completo": "Dr. Sebastián López",
-    "registro_profesional": "MP-74125",
-    "institucion": "CENTRO MÉDICO BIENESTAR"
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Valentina Gómez Ruiz",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 29,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dr. Sebastián López",
+      "registro_profesional": "MP-74125",
+      "especialidad": null,
+      "institucion": "CENTRO MÉDICO BIENESTAR"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Gastroenteritis aguda",
+        "codigo_cie10": "A09",
+        "tipo": null
+      }
+    ],
+    "medicamentos": [],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [],
+    "fecha_documento": null,
+    "observaciones": "Se certifica que la paciente fue valorada en consulta médica y requiere reposo domiciliario durante 3 días. Indicaciones: Mantener hidratación, dieta blanda y reposo. Consultar nuevamente si presenta empeoramiento de los síntomas.",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "profesional.especialidad",
+      "fecha_documento"
+    ]
   },
-  "diagnosticos": [
-    {
-      "descripcion": "Gastroenteritis aguda",
-      "codigo_cie10": "A09"
-    }
-  ],
-  "medicamentos": [],
-  "estudios": [],
-  "procedimientos": [],
-  "especialidad": "Medicina General",
-  "prioridad": "Rutina",
-  "certificacion": "Se certifica que la paciente fue valorada en consulta médica y requiere reposo domiciliario durante 3 días.",
-  "indicaciones": [
-    "Mantener hidratación, dieta blanda y reposo.",
-    "Consultar nuevamente si presenta empeoramiento de los síntomas."
-  ]
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  }
 }

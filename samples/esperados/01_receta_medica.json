@@ -60,5 +60,11 @@
       "medicamentos[1].via_administracion",
       "fecha_documento"
     ]
+  },
+
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
   }
 }
+
