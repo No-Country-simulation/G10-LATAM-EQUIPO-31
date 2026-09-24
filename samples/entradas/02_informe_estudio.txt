@@ -1,0 +1,25 @@
+CENTRO MÉDICO VIDA
+
+INFORME DE ESTUDIO DE DIAGNÓSTICO POR IMÁGENES
+
+Paciente: Miguel Ángel Torres
+Edad: 63 años
+
+Médico solicitante: Dra. Patricia Gómez
+Matrícula profesional: MP-78214
+
+Estudio realizado:
+Tomografía computarizada de tórax con contraste.
+
+Hallazgos:
+Se observa defecto de llenado en arterias pulmonares segmentarias,
+compatible con tromboembolismo pulmonar agudo.
+
+Diagnóstico:
+Tromboembolismo pulmonar agudo
+
+CIE-10: I26.9
+
+Especialidad: Radiología / Neumología
+
+Prioridad: Urgente

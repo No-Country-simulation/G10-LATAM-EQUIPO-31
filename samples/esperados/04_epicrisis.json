@@ -1,0 +1,39 @@
+{
+  "documento_id": "DOC-EPICRISIS-004",
+  "tipo_documento": "Epicrisis / Informe de Alta",
+  "paciente": {
+    "nombre_completo": "José Antonio Herrera",
+    "edad": 67
+  },
+  "profesional": {
+    "nombre_completo": "Dra. Carolina Méndez",
+    "registro_profesional": "MP-52981",
+    "institucion": "HOSPITAL CENTRAL"
+  },
+  "diagnosticos": [
+    {
+      "descripcion": "Neumonía bacteriana",
+      "codigo_cie10": "J15.9"
+    }
+  ],
+  "medicamentos": [
+    {
+      "nombre": "Amoxicilina con ácido clavulánico",
+      "dosis": "875/125 mg",
+      "frecuencia": "cada 12 horas",
+      "duracion": "7 días"
+    }
+  ],
+  "estudios": [],
+  "procedimientos": [],
+  "especialidad": "Medicina Interna",
+  "prioridad": "Rutina",
+  "fecha_ingreso": "15/09/2026",
+  "fecha_alta": "18/09/2026",
+  "resumen_clinico": "Paciente ingresó por fiebre, tos productiva y dificultad respiratoria. Durante la hospitalización presentó evolución clínica favorable luego del tratamiento indicado.",
+  "indicaciones": [
+    "Continuar tratamiento en domicilio.",
+    "Control por Medicina Interna en 7 días.",
+    "Acudir a urgencias ante dificultad respiratoria o fiebre persistente."
+  ]
+}

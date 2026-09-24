@@ -1,0 +1,29 @@
+{
+  "documento_id": "DOC-PROCEDIMIENTO-IMG-008",
+  "tipo_documento": "Orden de Solicitud de Procedimiento",
+  "paciente": {
+    "nombre_completo": "Daniela Rodríguez Pérez",
+    "edad": 38
+  },
+  "profesional": {
+    "nombre_completo": "Dr. Felipe Mendoza",
+    "registro_profesional": "MP-61347",
+    "institucion": "HOSPITAL SANTA MARÍA"
+  },
+  "diagnosticos": [
+    {
+      "descripcion": "Colelitiasis sin colecistitis",
+      "codigo_cie10": "K80.2"
+    }
+  ],
+  "medicamentos": [],
+  "estudios": [],
+  "procedimientos": [
+    {
+      "descripcion": "Colecistectomía laparoscópica"
+    }
+  ],
+  "especialidad": "Cirugía General",
+  "prioridad": "Rutina",
+  "indicaciones": "Programar valoración prequirúrgica antes del procedimiento."
+}

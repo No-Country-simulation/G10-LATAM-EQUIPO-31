@@ -1,0 +1,29 @@
+{
+  "documento_id": "DOC-CERTIFICADO-005",
+  "tipo_documento": "Certificado Medico",
+  "paciente": {
+    "nombre_completo": "Valentina Gómez Ruiz",
+    "edad": 29
+  },
+  "profesional": {
+    "nombre_completo": "Dr. Sebastián López",
+    "registro_profesional": "MP-74125",
+    "institucion": "CENTRO MÉDICO BIENESTAR"
+  },
+  "diagnosticos": [
+    {
+      "descripcion": "Gastroenteritis aguda",
+      "codigo_cie10": "A09"
+    }
+  ],
+  "medicamentos": [],
+  "estudios": [],
+  "procedimientos": [],
+  "especialidad": "Medicina General",
+  "prioridad": "Rutina",
+  "certificacion": "Se certifica que la paciente fue valorada en consulta médica y requiere reposo domiciliario durante 3 días.",
+  "indicaciones": [
+    "Mantener hidratación, dieta blanda y reposo.",
+    "Consultar nuevamente si presenta empeoramiento de los síntomas."
+  ]
+}

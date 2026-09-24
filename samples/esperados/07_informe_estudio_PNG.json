@@ -1,0 +1,29 @@
+{
+  "documento_id": "DOC-INFORME-IMG-007",
+  "tipo_documento": "Informe de Estudio de Diagnostico por Imagenes/Laboratorio",
+  "paciente": {
+    "nombre_completo": "Miguel Ángel Torres",
+    "edad": 63
+  },
+  "profesional": {
+    "nombre_completo": "Dra. Patricia Gómez",
+    "registro_profesional": "MP-78214",
+    "institucion": "CENTRO MÉDICO VIDA"
+  },
+  "diagnosticos": [
+    {
+      "descripcion": "Tromboembolismo pulmonar agudo",
+      "codigo_cie10": "I26.9"
+    }
+  ],
+  "medicamentos": [],
+  "estudios": [
+    {
+      "descripcion": "Tomografía computarizada de tórax con contraste"
+    }
+  ],
+  "procedimientos": [],
+  "especialidad": "Radiología / Neumología",
+  "prioridad": "Urgente",
+  "hallazgos": "Se observa defecto de llenado en arterias pulmonares segmentarias, compatible con tromboembolismo pulmonar agudo."
+}

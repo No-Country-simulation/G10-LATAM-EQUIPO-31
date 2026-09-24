@@ -1,0 +1,41 @@
+{
+  "documento_id": "DOC-RECETA-PDF-006",
+  "tipo_documento": "Receta Medica",
+  "paciente": {
+    "nombre_completo": "Laura Martínez Gómez",
+    "edad": 45
+  },
+  "profesional": {
+    "nombre_completo": "Dr. Andrés Ramírez",
+    "registro_profesional": "MP-45821",
+    "institucion": "CLÍNICA SAN GABRIEL"
+  },
+  "diagnosticos": [
+    {
+      "descripcion": "Hipertensión arterial esencial",
+      "codigo_cie10": "I10"
+    }
+  ],
+  "medicamentos": [
+    {
+      "nombre": "Losartán",
+      "dosis": "50 mg",
+      "frecuencia": "cada 12 horas",
+      "duracion": "30 días"
+    },
+    {
+      "nombre": "Amlodipino",
+      "dosis": "5 mg",
+      "frecuencia": "cada 24 horas",
+      "duracion": "30 días"
+    }
+  ],
+  "estudios": [],
+  "procedimientos": [],
+  "especialidad": null,
+  "prioridad": "Rutina",
+  "indicaciones": [
+    "Continuar control de presión arterial.",
+    "Asistir a consulta de seguimiento."
+  ]
+}
