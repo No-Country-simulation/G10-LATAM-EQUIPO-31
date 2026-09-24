@@ -13,8 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.schemas.classification import ClassificationResult
-from app.schemas.document import DocumentoEntrada
+from app.schemas.clasificacion import Classification
+from app.schemas.documento import DocumentoEntrada
 from app.services.gemini_client import generar_salida_estructurada
 
 API_KEY_ENV = "GEMINI_CLASSIFIER_API_KEY"
@@ -38,18 +38,18 @@ Responde siempre con una confianza entre 0 y 1, y una justificacion breve \
 (1-2 frases) de por que elegiste ese tipo y esa especialidad."""
 
 
-def clasificar_documento(documento: DocumentoEntrada) -> ClassificationResult:
+def clasificar_documento(documento: DocumentoEntrada) -> Classification:
     """Ejecuta la clasificacion de un `DocumentoEntrada` via LLM multimodal."""
     contenido_prompt = f"{_PROMPT_SISTEMA}\n\nDocumento a clasificar ({documento.nombre_archivo}):"
-    if documento.texto:
-        contenido_prompt += f"\n\n{documento.texto}"
+    if documento.documento_texto:
+        contenido_prompt += f"\n\n{documento.documento_texto}"
 
     resultado = generar_salida_estructurada(
         api_key_env=API_KEY_ENV,
         prompt=contenido_prompt,
         contenido_bytes=documento.contenido_bytes,
         mime_type=documento.mime_type,
-        schema=ClassificationResult,
+        schema=Classification,
     )
     return resultado
 

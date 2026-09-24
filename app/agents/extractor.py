@@ -29,8 +29,9 @@ import logging
 from typing import Any, Protocol
 
 from pydantic import ValidationError
+from app.schemas.documento import DocumentoEntrada
 
-from app.schemas.extraccion_schema import (
+from app.schemas.extraccion import (
     ExtraccionClinica,
     Paciente,
     Profesional,
@@ -55,7 +56,13 @@ class ProveedorLLM(Protocol):
     depende de qué proveedor termine usando el equipo.
     """
 
-    def generar(self, prompt_sistema: str, prompt_usuario: str) -> str: ...
+def generar(
+    self,
+    prompt_sistema: str,
+    prompt_usuario: str,
+    contenido_bytes: bytes | None = None,
+    mime_type: str | None = None,
+) -> str: ...
 
 
 class ErrorTecnicoProveedor(Exception):
@@ -88,14 +95,12 @@ def _extraer_json(texto: str) -> dict[str, Any]:
     return json.loads(texto)
 
 
-def _construir_prompt(texto_documento: str, clasificacion: Any) -> tuple[str, str]:
+def _construir_prompt(documento: DocumentoEntrada, clasificacion: Any) -> tuple[str, str]:
     prompt_sistema = (
         "Eres un asistente clínico que extrae información estructurada de "
         "documentos hospitalarios. Devuelve SIEMPRE un único objeto JSON, sin "
         "texto adicional ni explicaciones, que cumpla EXACTAMENTE esta forma:\n"
         "{\n"
-        '  "tipo_documento": str,\n'
-        '  "especialidad": str|null,\n'
         '  "paciente": {"nombre_completo": str|null, "tipo_documento": str|null, '
         '"numero_documento": str|null, "edad": int|null, "sexo": str|null},\n'
         '  "profesional": {"nombre_completo": str|null, "registro_profesional": str|null, '
@@ -105,6 +110,7 @@ def _construir_prompt(texto_documento: str, clasificacion: Any) -> tuple[str, st
         '  "medicamentos": [{"nombre": str, "dosis": str|null, "via_administracion": str|null, '
         '"frecuencia": str|null, "duracion": str|null}],\n'
         '  "estudios_solicitados": [{"tipo": str, "descripcion": str, "prioridad": str|null}],\n'
+        '  "procedimientos_solicitados": [{"descripcion": str, "prioridad": str|null}],\n'
         '  "nivel_urgencia": "no_urgente"|"prioritario"|"urgente"|"emergencia"|null,\n'
         '  "senales_gravedad": [str],\n'
         '  "fecha_documento": str|null,\n'
@@ -119,9 +125,17 @@ def _construir_prompt(texto_documento: str, clasificacion: Any) -> tuple[str, st
     )
     prompt_usuario = (
         f"Tipo de documento clasificado (Agente 1): {clasificacion.tipo_documento}\n"
-        f"Especialidad clasificada (Agente 1): {clasificacion.especialidad or 'no informada'}\n\n"
-        f"Documento:\n{texto_documento}"
+        f"Especialidad clasificada (Agente 1): "
+        f"{clasificacion.especialidad or 'no informada'}\n\n"
     )
+
+    if documento.documento_texto:
+        prompt_usuario += f"Documento:\n{documento.documento_texto}"
+    else:
+        prompt_usuario += (
+            "El documento clínico original se adjunta como contenido multimodal. "
+            "Analízalo directamente para realizar la extracción."
+        )
     return prompt_sistema, prompt_usuario
 
 
@@ -151,8 +165,7 @@ def _normalizar_resultado(resultado: ExtraccionClinica, clasificacion: Any) -> E
     - campos_no_encontrados se recalcula por código en vez de confiar
       ciegamente en la lista que reportó el LLM.
     """
-    resultado.tipo_documento = clasificacion.tipo_documento
-    resultado.especialidad = clasificacion.especialidad
+
 
     calculados = _calcular_campos_no_encontrados(resultado)
     combinados = list(dict.fromkeys([*resultado.campos_no_encontrados, *calculados]))
@@ -163,13 +176,12 @@ def _normalizar_resultado(resultado: ExtraccionClinica, clasificacion: Any) -> E
 def _extraccion_vacia(clasificacion: Any, motivo: str) -> ExtraccionClinica:
     """Salida degradada cuando se agotan los reintentos: nunca se lanza excepción."""
     return ExtraccionClinica(
-        tipo_documento=clasificacion.tipo_documento,
-        especialidad=clasificacion.especialidad,
         paciente=Paciente(),
         profesional=Profesional(),
         diagnosticos=[],
         medicamentos=[],
         estudios_solicitados=[],
+        procedimientos_solicitados=[],
         nivel_urgencia=None,
         senales_gravedad=[],
         campos_no_encontrados=list(_CAMPOS_MINIMOS_ESPERADOS),
@@ -184,6 +196,7 @@ def _intentar_con_proveedor(
     etiqueta: str,
     errores: list[str],
     clasificacion: Any,
+    documento: DocumentoEntrada,
 ) -> ExtraccionClinica | None:
     """
     Intenta hasta MAX_INTENTOS veces con UN proveedor. Devuelve el resultado
@@ -192,7 +205,7 @@ def _intentar_con_proveedor(
     """
     for intento in range(1, MAX_INTENTOS + 1):
         try:
-            respuesta = proveedor.generar(prompt_sistema, prompt_usuario)
+            respuesta = proveedor.generar(prompt_sistema, prompt_usuario, contenido_bytes=documento.contenido_bytes, mime_type=documento.mime_type,)
         except ErrorTecnicoProveedor as exc:
             # Se reintenta con el MISMO proveedor (un timeout/429 puntual
             # puede ser transitorio); solo se pasa al fallback cuando se
@@ -234,7 +247,7 @@ def _intentar_con_proveedor(
 
 
 def extraer_datos_clinicos(
-    texto_documento: str,
+    documento: DocumentoEntrada,
     clasificacion: Any,
     proveedor: ProveedorLLM,
     proveedor_fallback: ProveedorLLM | None = None,
@@ -248,11 +261,11 @@ def extraer_datos_clinicos(
     proveedor: cliente concreto del LLM principal.
     proveedor_fallback: cliente del LLM alternativo (opcional).
     """
-    prompt_sistema, prompt_usuario = _construir_prompt(texto_documento, clasificacion)
+    prompt_sistema, prompt_usuario = _construir_prompt(documento, clasificacion)
     errores: list[str] = []
 
     resultado = _intentar_con_proveedor(
-        proveedor, prompt_sistema, prompt_usuario, "principal", errores, clasificacion
+        proveedor, prompt_sistema, prompt_usuario, "principal", errores, clasificacion, documento
     )
     if resultado is not None:
         return resultado
@@ -260,7 +273,7 @@ def extraer_datos_clinicos(
     if proveedor_fallback is not None:
         logger.warning("Proveedor principal no respondió correctamente; probando fallback.")
         resultado = _intentar_con_proveedor(
-            proveedor_fallback, prompt_sistema, prompt_usuario, "fallback", errores, clasificacion
+            proveedor_fallback, prompt_sistema, prompt_usuario, "fallback", errores, clasificacion, documento
         )
         if resultado is not None:
             return resultado
