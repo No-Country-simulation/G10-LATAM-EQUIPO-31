@@ -79,6 +79,12 @@ def _configurar_agentes_mock(monkeypatch):
         lambda **kwargs: EXTRACCION_PRUEBA,
     )
 
+    monkeypatch.setattr(
+        graph,
+        "ProveedorGemini",
+        lambda: object(),
+    )
+
 
 def test_grafo_corre_de_punta_a_punta(monkeypatch):
     """El grafo debe recorrer clasificador, extractor y validación."""

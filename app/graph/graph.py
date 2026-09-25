@@ -7,13 +7,6 @@ Responsable: Jennifer Silva / Apoyo: Kimberlyn Carchi (integración).
 Secuencia de este Sprint (según la actividad asignada):
     Inicio -> Clasificador -> Extractor -> Validación Pydantic -> Fin
 
-Los nodos `nodo_clasificador` y `nodo_extractor` son PLACEHOLDERS: devuelven
-datos simulados para poder probar el recorrido completo del grafo sin
-depender de que Zahir y Mauricio ya tengan sus versiones reales listas.
-Cuando las tengan, solo reemplazan el CUERPO de estas dos funciones, la
-firma (recibe MediFlowState, devuelve dict) y su lugar en el grafo no
-cambian.
-
 IMPORTANTE: MediFlowState es un TypedDict (ver app/schemas/state.py), no
 tiene defaults en tiempo de ejecución. Por eso todas las lecturas de campos
 opcionales usan state.get("campo", default) en vez de state["campo"],
