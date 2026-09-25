@@ -47,7 +47,7 @@ async def recibir_documento(
     # 4. Construir el contrato común de entrada de MediFlow
     documento = DocumentoEntrada(
         documento_id=documento_id,
-        tipo_archivo=tipo_archivo,,
+        tipo_archivo=tipo_archivo,
         canal_origen=canal_origen,
         nombre_archivo=archivo.filename,
         mime_type=mime_type,
