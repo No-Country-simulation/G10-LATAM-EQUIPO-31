@@ -7,13 +7,6 @@ Responsable: Jennifer Silva / Apoyo: Kimberlyn Carchi (integración).
 Secuencia de este Sprint (según la actividad asignada):
     Inicio -> Clasificador -> Extractor -> Validación Pydantic -> Fin
 
-Los nodos `nodo_clasificador` y `nodo_extractor` son PLACEHOLDERS: devuelven
-datos simulados para poder probar el recorrido completo del grafo sin
-depender de que Zahir y Mauricio ya tengan sus versiones reales listas.
-Cuando las tengan, solo reemplazan el CUERPO de estas dos funciones, la
-firma (recibe MediFlowState, devuelve dict) y su lugar en el grafo no
-cambian.
-
 IMPORTANTE: MediFlowState es un TypedDict (ver app/schemas/state.py), no
 tiene defaults en tiempo de ejecución. Por eso todas las lecturas de campos
 opcionales usan state.get("campo", default) en vez de state["campo"],
@@ -23,6 +16,11 @@ el diccionario, y acceder con [] directo lanzaría KeyError.
 from langgraph.graph import StateGraph, START, END
 
 from app.schemas.state import MediFlowState, ResultadoValidacion
+from app.agents.classifier import clasificar_documento
+from app.agents.extractor import extraer_datos_clinicos
+from app.services.gemini_provider import ProveedorGemini
+from app.schemas.clasificacion import Classification
+from app.schemas.extraccion import ExtraccionClinica
 
 # Campos que la Validación Pydantic exige para considerar el documento
 # "completo" al cierre del Sprint 1 (Clasificador + Extractor).
@@ -42,60 +40,82 @@ CAMPOS_OBLIGATORIOS_EXTRACCION = [
 
 def nodo_clasificador(state: MediFlowState) -> dict:
     """
-    PLACEHOLDER, Se reemplaza el cuerpo de esta función por la
-    llamada real al LLM (Gemini) que clasifica state["documento_contenido"].
+    Ejecuta el Agente Clasificador (MF-05) sobre el documento
+    almacenado en el estado del grafo.
     """
+
+    documento = state["documento"]
+
+    clasificacion = clasificar_documento(documento)
+
     return {
-        "tipo_documento": "Informe de Estudio por Imágenes",
-        "especialidad": "Radiología / Neumonología",
-        "nivel_prioridad": "Urgente",
-        "score_confianza_clasificacion": 0.99,
+        "clasificacion": clasificacion
     }
 
 
 def nodo_extractor(state: MediFlowState) -> dict:
     """
-    PLACEHOLDER, Se reemplaza el cuerpo de esta función por la
-    extracción real, que además debería variar según
-    state.get("tipo_documento") (plantilla distinta por cada uno de los
-    5 tipos del plan).
+    Ejecuta el Agente Extractor (MF-06) utilizando el contenido
+    del documento y la clasificación generada por el Agente 1.
     """
+
+    documento = state["documento"]
+    clasificacion = state["clasificacion"]
+
+    extraccion = extraer_datos_clinicos(
+        documento=documento,
+        clasificacion=clasificacion,
+        proveedor=ProveedorGemini(),
+    )
+
     return {
-        "paciente_nombre": "Carlos Eduardo Mendes",
-        "paciente_edad": 52,
-        "medico_nombre": "Dra. Renata Silveira",
-        "medico_matricula": "145892",
-        "diagnostico_principal": "Tromboembolismo Pulmonar Agudo (TEP)",
-        "cie10_sugerido": "I26.9",
+        "extraccion": extraccion
     }
 
 
 def nodo_validacion_pydantic(state: MediFlowState) -> dict:
     """
-    Verifica, usando el modelo Pydantic ResultadoValidacion (definido en
-    app/schemas/state.py), que los campos obligatorios de Clasificador y
-    Extractor llegaron completos antes de cerrar el resultado del Sprint 1.
+    Verifica que los resultados de clasificación y extracción
+    existan y cumplan con sus contratos Pydantic.
 
-    (El score de confianza combinado con detección de inconsistencias —
-    Sprint 2, ver diagrama consolidado, se integra como un nodo adicional
-    después de este, no lo reemplaza.)
+    La evaluación clínica de inconsistencias, confianza y decisión
+    de HITL pertenece a los siguientes Sprints.
     """
-    errores = []
-    campos_a_revisar = CAMPOS_OBLIGATORIOS_CLASIFICACION + CAMPOS_OBLIGATORIOS_EXTRACCION
 
-    for campo in campos_a_revisar:
-        valor = state.get(campo)
-        if valor in (None, ""):
-            errores.append(f"Falta el campo obligatorio: {campo}")
+    errores = []
+
+    clasificacion = state.get("clasificacion")
+    extraccion = state.get("extraccion")
+
+    if clasificacion is None:
+        errores.append(
+            "No se generó un resultado de clasificación."
+        )
+    else:
+        try:
+            Classification.model_validate(clasificacion)
+        except Exception as exc:
+            errores.append(
+                f"Clasificación inválida: {exc}"
+            )
+
+    if extraccion is None:
+        errores.append(
+            "No se generó un resultado de extracción."
+        )
+    else:
+        try:
+            ExtraccionClinica.model_validate(extraccion)
+        except Exception as exc:
+            errores.append(
+                f"Extracción inválida: {exc}"
+            )
 
     resultado = ResultadoValidacion(
-        validacion_ok=(len(errores) == 0),
+        validacion_ok=len(errores) == 0,
         errores_validacion=errores,
     )
 
-    # .model_dump() entrega un dict con las mismas claves que MediFlowState
-    # espera (errores_validacion, validacion_ok), listo para fusionarse
-    # como actualización parcial del estado.
     return resultado.model_dump()
 
 

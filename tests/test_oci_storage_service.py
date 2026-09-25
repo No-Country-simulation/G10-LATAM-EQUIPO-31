@@ -96,3 +96,14 @@ def test_falta_variable_de_entorno_lanza_key_error_al_crear_el_servicio(monkeypa
 
     with pytest.raises(KeyError):
         OCIStorageService()
+
+def test_upload_document_sanitiza_nombre_archivo(service):
+    """El nombre usado en OCI no debe conservar rutas ni caracteres problemáticos."""
+
+    object_name = service.upload_document(
+        "DOC-2026-SEC001",
+        b"contenido",
+        "../carpeta/mi archivo clínico.pdf",
+    )
+
+    assert object_name == "recibidos/DOC-2026-SEC001_mi_archivo_cl_nico.pdf"

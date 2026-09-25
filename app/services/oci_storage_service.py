@@ -1,5 +1,5 @@
 import os
-
+import re
 import oci
 from dotenv import load_dotenv
 
@@ -7,6 +7,11 @@ load_dotenv()
 
 RECIBIDOS_PREFIX = "recibidos/"
 
+def _sanitizar_nombre_archivo(filename: str) -> str:
+    """Limpia el nombre del archivo antes de usarlo como object_name en OCI."""
+    nombre = filename.replace("\\", "/").split("/")[-1]
+    nombre = re.sub(r"[^A-Za-z0-9._-]", "_", nombre)
+    return nombre or "archivo"
 
 class OCIStorageService:
     """Servicio de conexión con OCI Object Storage para el bucket de documentos clínicos."""
@@ -27,7 +32,9 @@ class OCIStorageService:
 
     def upload_document(self, document_id: str, content: bytes, filename: str) -> str:
         """Sube un documento a la carpeta recibidos/ del bucket y devuelve el nombre del objeto."""
-        object_name = f"{RECIBIDOS_PREFIX}{document_id}_{filename}"
+        filename_seguro = _sanitizar_nombre_archivo(filename)
+        object_name = f"{RECIBIDOS_PREFIX}{document_id}_{filename_seguro}"
+        
         self._client.put_object(
             namespace_name=self._namespace,
             bucket_name=self._bucket_name,
