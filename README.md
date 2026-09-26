@@ -93,10 +93,23 @@ G10-LATAM-EQUIPO-31/
 | Actividad | Responsable |
 |---|---|
 | MF-01 Estructura base del proyecto | Katherine / apoyo coordinación |
-| MF-02 Contratos y schemas Pydantic | Manuel |
-| MF-03 Ingesta mediante FastAPI | Duvan |
+| MF-02 Contratos y schemas Pydantic | Manuel / Kimberlyn |
+| MF-03 Ingesta mediante FastAPI | Duvan / Kimberlyn |
 | MF-04 Integración inicial OCI Object Storage | Katherine |
 | MF-05 Agente Clasificador | Zahir |
 | MF-06 Agente Extractor | Mauricio |
 | MF-07 Orquestación base LangGraph | Jennifer + Kimberlyn |
-| MF-16 Dataset/casos de prueba | Manuel + apoyo equipo |
+| MF-08 Integración del flujo completo | Kimberlyn |
+| MF-16 Dataset/casos de prueba | Manuel / Kimberlyn |
+
+## Cierre del Sprint 1
+
+Al cierre del Sprint 1 quedó integrado y validado el flujo completo de procesamiento de documentos clínicos:
+
+**Ingesta → Clasificador → Extractor → Validación → OCI**
+
+El sistema recibe el documento a través del endpoint `POST /documentos`, lo clasifica, extrae los datos clínicos estructurados con el LLM multimodal y valida la respuesta contra los contratos Pydantic. El documento original se persiste en OCI Object Storage, en la carpeta `recibidos/`.
+
+- **Formatos probados:** TXT, PDF, PNG y JPG, incluyendo casos multimodales de imagen.
+- **Pruebas automatizadas:** 24/24 aprobadas sobre la rama `develop`.
+- **Evidencias:** el detalle de cada ejecución y las respuestas generadas se documentan en [docs/evidencias-sprint-1.md](docs/evidencias-sprint-1.md).
