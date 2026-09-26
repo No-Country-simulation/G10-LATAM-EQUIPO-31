@@ -1,0 +1,70 @@
+{
+  "status": "procesado",
+  "documento_id": "DOC-TXT-001",
+  "canal_origen": "test",
+  "nombre_archivo": "01_receta_medica.txt",
+  "tipo_contenido": "text/plain",
+  "oci_object_name": "recibidos/DOC-TXT-001_01_receta_medica.txt",
+  "clasificacion": {
+    "tipo_documento": "Receta Medica",
+    "especialidad": "Cardiologia",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 1,
+    "justificacion": "El documento es claramente una receta medica para el tratamiento de hipertension arterial con Losartan y Amlodipino."
+  },
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Laura Martínez Gómez",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 45,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dr. Andrés Ramírez",
+      "registro_profesional": "MP-45821",
+      "especialidad": "Cardiologia",
+      "institucion": "CLÍNICA SAN GABRIEL"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Hipertensión arterial esencial",
+        "codigo_cie10": "I10",
+        "tipo": "principal"
+      }
+    ],
+    "medicamentos": [
+      {
+        "nombre": "Losartán",
+        "dosis": "50 mg",
+        "via_administracion": null,
+        "frecuencia": "cada 12 horas",
+        "duracion": "30 días"
+      },
+      {
+        "nombre": "Amlodipino",
+        "dosis": "5 mg",
+        "via_administracion": null,
+        "frecuencia": "cada 24 horas",
+        "duracion": "30 días"
+      }
+    ],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [],
+    "fecha_documento": null,
+    "observaciones": "Prioridad: Rutina",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  },
+  "mensaje": "Documento procesado correctamente por MediFlow"
+}
