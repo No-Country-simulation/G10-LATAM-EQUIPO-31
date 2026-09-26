@@ -106,9 +106,11 @@ G10-LATAM-EQUIPO-31/
 
 Al cierre del Sprint 1 quedó integrado y validado el flujo completo de procesamiento de documentos clínicos:
 
-**Ingesta → Clasificador → Extractor → Validación → OCI**
+**Flujo de procesamiento:** Ingesta → Clasificador → Extractor → Validación
 
-El sistema recibe el documento a través del endpoint `POST /documentos`, lo clasifica, extrae los datos clínicos estructurados con el LLM multimodal y valida la respuesta contra los contratos Pydantic. El documento original se persiste en OCI Object Storage, en la carpeta `recibidos/`.
+**Persistencia:** documento original almacenado en OCI Object Storage (`recibidos/`).
+
+El sistema recibe el documento a través del endpoint `POST /documentos`, lo clasifica, extrae los datos clínicos estructurados con el LLM multimodal y valida la respuesta contra los contratos Pydantic.
 
 - **Formatos probados:** TXT, PDF, PNG y JPG, incluyendo casos multimodales de imagen.
 - **Pruebas automatizadas:** 24/24 aprobadas sobre la rama `develop`.
