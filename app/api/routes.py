@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.services.oci_storage_service import OCIStorageService, PersistenciaOCIError
 from app.graph.graph import grafo_mediflow
@@ -11,6 +12,40 @@ from app.schemas.documento import DocumentoEntrada
 logger = logging.getLogger("mediflow.app.api.routes")
 
 router = APIRouter()
+
+# Campos del documento original que NO se persisten junto con el resultado:
+# el contenido ya vive en recibidos/ (MF-04), así que duplicarlo acá solo
+# infla el JSON de resultado sin necesidad.
+_CAMPOS_DOCUMENTO_EXCLUIDOS_DEL_RESULTADO = {"contenido_bytes", "documento_texto"}
+
+
+def _serializar_valor_estado(clave: str, valor):
+    """Convierte un valor del estado del grafo a algo JSON-serializable."""
+    if isinstance(valor, DocumentoEntrada):
+        return valor.model_dump(exclude=_CAMPOS_DOCUMENTO_EXCLUIDOS_DEL_RESULTADO)
+    if isinstance(valor, BaseModel):
+        return valor.model_dump()
+    return valor
+
+
+def _serializar_estado_grafo(resultado: dict) -> dict:
+    """
+    Serializa el estado COMPLETO que devuelve `grafo_mediflow.invoke(...)`,
+    sin asumir de antemano qué claves va a tener: MF-09/MF-10/MF-11/MF-19
+    todavía pueden agregar campos nuevos al estado (score de confianza,
+    motivo de derivación, reintentos técnicos, etc.) y no hace falta tocar
+    esta función para que se persistan — alcanza con que sean valores
+    planos o instancias de un modelo Pydantic (el patrón que ya usa todo
+    el proyecto para las salidas de los agentes).
+
+    Excluye el contenido pesado del documento original (bytes y texto
+    completo): ya se guardó en recibidos/ (MF-04), duplicarlo acá no suma
+    nada y solo agranda el objeto en OCI.
+    """
+    return {
+        clave: _serializar_valor_estado(clave, valor)
+        for clave, valor in resultado.items()
+    }
 
 
 def determinar_estado(validacion_ok: bool, hubo_excepcion: bool) -> str:
@@ -65,14 +100,35 @@ async def recibir_documento(
             detail=f"Tipo de archivo no soportado: {mime_type}",
         )
 
-    # 3. Guardar documento original en OCI
+    # 3. Guardar documento original en OCI. Si esto falla, es una caída de
+    #    infraestructura, no un fallo del flujo: no tiene sentido correr el
+    #    grafo (ni gastar una llamada al LLM) si ni siquiera se pudo
+    #    guardar el documento que se va a procesar, y reintentar la
+    #    persistencia de un registro de error contra el mismo OCI que
+    #    acaba de fallar tampoco sirve. Se responde 503 directo, sin
+    #    ejecutar el grafo ni intentar persistir nada más.
     storage = OCIStorageService()
 
-    object_name = storage.upload_document(
-        document_id=documento_id,
-        content=contenido,
-        filename=archivo.filename,
-    )
+    try:
+        object_name = storage.upload_document(
+            document_id=documento_id,
+            content=contenido,
+            filename=archivo.filename,
+        )
+    except Exception as exc:
+        logger.error(
+            "No se pudo guardar el documento original de documento_id=%s en OCI: %s",
+            documento_id, exc,
+        )
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "error",
+                "documento_id": documento_id,
+                "mensaje": "No se pudo guardar el documento original en OCI Object Storage.",
+                "error": f"{type(exc).__name__}: {exc}",
+            },
+        )
 
     # 4. Construir el contrato común de entrada de MediFlow
     documento = DocumentoEntrada(
@@ -104,26 +160,27 @@ async def recibir_documento(
         validacion_ok=validacion_ok, hubo_excepcion=hubo_excepcion
     )
 
-    # 6. Construir el resultado del flujo integrado (si corrió). La
-    #    validación Pydantic puede fallar precisamente porque el
-    #    clasificador o el extractor no llegaron a producir resultado, así
-    #    que acá no se puede asumir que ninguno de los dos exista.
-    if resultado is not None:
-        clasificacion = resultado.get("clasificacion")
-        extraccion = resultado.get("extraccion")
+    # 6. Serializar el estado COMPLETO que devolvió el grafo (para
+    #    persistirlo tal cual, ver _serializar_estado_grafo) y armar el
+    #    cuerpo de la respuesta HTTP, que mantiene su forma previa
+    #    (clasificacion/extraccion/validacion en el nivel superior) por
+    #    compatibilidad con quien ya consume la API. La validación
+    #    Pydantic puede fallar precisamente porque el clasificador o el
+    #    extractor no llegaron a producir resultado, así que acá no se
+    #    puede asumir que ninguno de los dos exista.
+    estado_completo = _serializar_estado_grafo(resultado) if resultado is not None else None
+
+    if estado_completo is not None:
+        extraccion = estado_completo.get("extraccion")
         cuerpo_resultado = {
-            "clasificacion": clasificacion.model_dump() if clasificacion else None,
-            "extraccion": extraccion.model_dump() if extraccion else None,
+            "clasificacion": estado_completo.get("clasificacion"),
+            "extraccion": extraccion,
             "validacion": {
-                "validacion_ok": resultado["validacion_ok"],
-                "errores_validacion": resultado["errores_validacion"],
+                "validacion_ok": estado_completo.get("validacion_ok"),
+                "errores_validacion": estado_completo.get("errores_validacion"),
             },
         }
-        nivel_urgencia = (
-            cuerpo_resultado["extraccion"].get("nivel_urgencia")
-            if cuerpo_resultado["extraccion"]
-            else None
-        )
+        nivel_urgencia = extraccion.get("nivel_urgencia") if extraccion else None
     else:
         cuerpo_resultado = {}
         nivel_urgencia = None
@@ -139,7 +196,7 @@ async def recibir_documento(
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "oci_object_name_original": object_name,
         "nivel_urgencia": nivel_urgencia,
-        "resultado": cuerpo_resultado or None,
+        "resultado": estado_completo,
         "error": error_tecnico,
     }
 

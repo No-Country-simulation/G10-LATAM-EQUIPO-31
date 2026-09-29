@@ -112,6 +112,18 @@ def test_upload_document_sanitiza_nombre_archivo(service):
     assert object_name == "recibidos/DOC-2026-SEC001_mi_archivo_cl_nico.pdf"
 
 
+def test_upload_document_sanitiza_document_id(service):
+    """El document_id tampoco debe permitir traversal de rutas en OCI."""
+
+    object_name = service.upload_document(
+        "../../etc/passwd",
+        b"contenido",
+        "informe.pdf",
+    )
+
+    assert object_name == "recibidos/passwd_informe.pdf"
+
+
 # --- MF-13: persistencia de resultados del flujo ---------------------------
 
 @pytest.mark.parametrize(

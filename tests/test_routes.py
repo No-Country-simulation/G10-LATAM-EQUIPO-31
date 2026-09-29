@@ -8,6 +8,7 @@ siguiendo el mismo patrón que tests/test_graph.py.
 """
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -34,12 +35,15 @@ class FakeOCIStorageService:
     """Reemplaza a OCIStorageService en las pruebas de la ruta: guarda en
     memoria lo que la ruta intentó persistir, sin tocar OCI real."""
 
-    def __init__(self, fallar_upload_resultado=False):
+    def __init__(self, fallar_upload_resultado=False, fallar_upload_document=False):
         self.documentos_subidos = []
         self.resultados_subidos = []
         self._fallar_upload_resultado = fallar_upload_resultado
+        self._fallar_upload_document = fallar_upload_document
 
     def upload_document(self, document_id, content, filename):
+        if self._fallar_upload_document:
+            raise RuntimeError("bucket no disponible (fallo simulado)")
         object_name = f"recibidos/{document_id}_{filename}"
         self.documentos_subidos.append(object_name)
         return object_name
@@ -108,13 +112,30 @@ def test_post_documentos_exitoso_persiste_en_procesados(monkeypatch):
     assert body["estado"] == "procesado_exitoso"
     assert body["persistencia_ok"] is True
     assert body["oci_object_name_resultado"] == "procesado_exitoso/DOC-TEST-001.json"
+    # La respuesta HTTP mantiene su forma previa (compatibilidad hacia atrás).
+    assert body["validacion"]["validacion_ok"] is True
 
     assert len(fake_storage.resultados_subidos) == 1
     documento_id, estado, resultado = fake_storage.resultados_subidos[0]
     assert documento_id == "DOC-TEST-001"
     assert estado == "procesado_exitoso"
-    assert resultado["resultado"]["extraccion"]["nivel_urgencia"] == "no_urgente"
+
+    # El envelope persistido guarda el estado COMPLETO del grafo (plano,
+    # tal como lo devuelve grafo_mediflow.invoke), no un subconjunto de
+    # campos elegidos a mano.
+    estado_persistido = resultado["resultado"]
+    assert estado_persistido["extraccion"]["nivel_urgencia"] == "no_urgente"
+    assert estado_persistido["validacion_ok"] is True
+    assert estado_persistido["errores_validacion"] == []
     assert resultado["oci_object_name_original"] == fake_storage.documentos_subidos[0]
+
+    # El documento original se serializa como metadata liviana: sin bytes
+    # ni texto completo (eso ya vive en recibidos/).
+    documento_persistido = estado_persistido["documento"]
+    assert documento_persistido["documento_id"] == "DOC-TEST-001"
+    assert documento_persistido["tipo_archivo"] == "JSON"
+    assert "contenido_bytes" not in documento_persistido
+    assert "documento_texto" not in documento_persistido
 
 
 def test_post_documentos_validacion_falla_persiste_en_auditoria_humana(monkeypatch):
@@ -133,7 +154,8 @@ def test_post_documentos_validacion_falla_persiste_en_auditoria_humana(monkeypat
 
     _, estado, resultado = fake_storage.resultados_subidos[0]
     assert estado == "auditoria_humana"
-    assert resultado["resultado"]["validacion"]["validacion_ok"] is False
+    assert resultado["resultado"]["validacion_ok"] is False
+    assert resultado["resultado"]["clasificacion"] is None
 
 
 def test_post_documentos_excepcion_en_el_grafo_persiste_en_errores_tecnicos(monkeypatch):
@@ -185,3 +207,63 @@ def test_post_documentos_fallo_de_persistencia_no_tumba_la_respuesta(monkeypatch
     assert body["estado"] == "procesado_exitoso"
     assert body["persistencia_ok"] is False
     assert body["oci_object_name_resultado"] is None
+
+
+@pytest.mark.parametrize(
+    "filename,content_type,tipo_esperado",
+    [
+        ("06_receta_medica.pdf", "application/pdf", "PDF"),
+        ("07_informe_estudio.png", "image/png", "Imagen"),
+        ("08_orden_procedimiento.jpg", "image/jpeg", "Imagen"),
+    ],
+)
+def test_post_documentos_formatos_binarios_de_samples_entradas(
+    monkeypatch, filename, content_type, tipo_esperado
+):
+    """PDF/PNG/JPG de samples/entradas/ deben procesarse igual que el texto,
+    y el documento persistido no debe incluir el contenido binario (ya vive
+    en recibidos/)."""
+
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(
+        client,
+        documento_id=f"DOC-TEST-{tipo_esperado.upper()}",
+        filename=filename,
+        content_type=content_type,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estado"] == "procesado_exitoso"
+    assert body["persistencia_ok"] is True
+
+    _, _, resultado = fake_storage.resultados_subidos[0]
+    documento_persistido = resultado["resultado"]["documento"]
+    assert documento_persistido["tipo_archivo"] == tipo_esperado
+    assert documento_persistido["nombre_archivo"] == filename
+    assert documento_persistido["mime_type"] == content_type
+    assert "contenido_bytes" not in documento_persistido
+    assert "documento_texto" not in documento_persistido
+
+
+def test_post_documentos_fallo_al_guardar_original_devuelve_503_estructurado(monkeypatch):
+    """Si falla la subida del documento ORIGINAL, no tiene sentido correr el
+    grafo ni intentar persistir un resultado contra el mismo OCI caído."""
+
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService(fallar_upload_document=True)
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-006")
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["documento_id"] == "DOC-TEST-006"
+    assert "error" in body
+
+    assert fake_storage.documentos_subidos == []
+    assert fake_storage.resultados_subidos == []

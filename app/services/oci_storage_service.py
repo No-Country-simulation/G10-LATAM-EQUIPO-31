@@ -58,9 +58,10 @@ class OCIStorageService:
 
     def upload_document(self, document_id: str, content: bytes, filename: str) -> str:
         """Sube un documento a la carpeta recibidos/ del bucket y devuelve el nombre del objeto."""
+        document_id_seguro = _sanitizar_nombre_archivo(document_id)
         filename_seguro = _sanitizar_nombre_archivo(filename)
-        object_name = f"{RECIBIDOS_PREFIX}{document_id}_{filename_seguro}"
-        
+        object_name = f"{RECIBIDOS_PREFIX}{document_id_seguro}_{filename_seguro}"
+
         self._client.put_object(
             namespace_name=self._namespace,
             bucket_name=self._bucket_name,
