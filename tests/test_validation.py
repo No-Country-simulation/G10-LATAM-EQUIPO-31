@@ -1,6 +1,6 @@
 ﻿import pytest
 from app.schemas.respuesta import RespuestaProcesamiento
-from app.validation import validar_consistencia_clinica, RutaDestino
+from app.graph.validation import validar_consistencia_clinica, RutaDestino
 
 def test_escenario_1_estandar():
     """Escenario estándar: documento procesado correctamente -> ruta estándar."""
