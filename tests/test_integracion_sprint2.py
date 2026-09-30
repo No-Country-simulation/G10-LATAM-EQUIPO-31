@@ -23,7 +23,7 @@ try:
     from app.services.validation import validar_consistencia_clinica
 except ImportError:
     try:
-        from app.graph.consistencia import validar_consistencia_clinica
+        from app.graph.validation import validar_consistencia_clinica
     except ImportError:
         def validar_consistencia_clinica(respuesta: RespuestaProcesamiento) -> ResultadoValidacion:
             errores = []
