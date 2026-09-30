@@ -48,9 +48,16 @@ que aplica estas reglas en orden:
 2. **`destino_principal` válido** — si el estado del grafo trae
    `destino_principal` con uno de los 3 valores del contrato, se usa
    directo como estado (`estandar`, `urgente` o `revision_humana`).
-3. **Fallback (MF-11 todavía no integrado)** — si `destino_principal` no
-   viene (o trae un valor desconocido, que se loguea como warning), se usa
-   la única señal disponible hoy: `validacion_ok = false` →
+3. **`destino_principal` fuera del contrato** — si viene con cualquier
+   valor que no sea **exactamente** `"estandar"`, `"urgente"` o
+   `"revision_humana"` (por ejemplo `"Urgente"`, `"estándar"`,
+   `" urgente"`, `"revision humana"`), se deriva a **`revision_humana`**
+   (aunque `validacion_ok` sea `true`) y se loguea un warning. Ante la duda,
+   un documento que podría ser urgente no debe terminar en `estandar`. El
+   valor original se sigue guardando tal cual dentro de `resultado`, para
+   poder auditarlo.
+4. **Fallback (MF-11 todavía no integrado)** — si `destino_principal` no
+   viene, se usa la única señal disponible hoy: `validacion_ok = false` →
    `revision_humana`; el resto → `estandar`.
 
 El servicio de persistencia (`oci_storage_service.py`) no conoce reglas de
@@ -60,7 +67,7 @@ negocio: solo guarda lo que se le pasa en la carpeta del estado.
 > `TypedDict` y LangGraph solo devuelve las claves declaradas ahí. Para que
 > `destino_principal`/`urgente`/`requiere_auditoria_humana` lleguen a
 > `routes.py`, MF-11 tiene que agregarlos a `MediFlowState`. Hasta entonces
-> aplica siempre el fallback del punto 3.
+> aplica siempre el fallback del punto 4.
 
 ## Qué se guarda
 
@@ -193,7 +200,9 @@ uno con una respuesta distinta:
   mockeados, `OCIStorageService` reemplazado) para el fallback sin
   `destino_principal` (`estandar`, `revision_humana`, `error_tecnico`), los
   3 valores de `destino_principal` presentes (con `urgente` copiado al
-  envelope), un `destino_principal` desconocido, una tabla de casos de
+  envelope), `urgente = true` con destino `revision_humana` (se conserva
+  sin pisarse), un `destino_principal` fuera del contrato (va a
+  `revision_humana` y deja warning), una tabla de casos de
   `determinar_estado`, el caso de
   tipo de archivo no soportado (no persiste nada), el caso de fallo de
   persistencia del resultado (no tumba la respuesta), el caso de fallo al

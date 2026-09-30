@@ -66,9 +66,13 @@ def determinar_estado(
        nodo que falla) -> error_tecnico.
     2. Si el estado trae un `destino_principal` válido (contrato de MF-11:
        "estandar", "urgente" o "revision_humana") -> se usa tal cual.
-    3. Si no (MF-11 todavía no está integrado, o mandó un valor
-       desconocido) -> fallback con la única señal disponible:
-       validacion_ok False va a revision_humana, el resto a estandar.
+    3. Si trae un `destino_principal` que no es exactamente uno de esos 3
+       valores (mayúsculas, acentos, espacios, otro texto) -> revision_humana,
+       con una advertencia en el log: ante la duda, un documento que podría
+       ser urgente no debe terminar en estandar.
+    4. Si no trae `destino_principal` (MF-11 todavía no está integrado) ->
+       fallback con la única señal disponible: validacion_ok False va a
+       revision_humana, el resto a estandar.
     """
     if hubo_excepcion:
         return ESTADO_ERROR_TECNICO
@@ -76,9 +80,10 @@ def determinar_estado(
         return destino_principal
     if destino_principal is not None:
         logger.warning(
-            "destino_principal desconocido %r; se usa el fallback por validacion_ok",
+            "destino_principal desconocido %r; se deriva a revision_humana",
             destino_principal,
         )
+        return "revision_humana"
     if not validacion_ok:
         return "revision_humana"
     return "estandar"

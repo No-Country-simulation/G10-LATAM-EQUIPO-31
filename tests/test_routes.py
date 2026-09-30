@@ -22,7 +22,7 @@ from app.schemas.extraccion import (
     Paciente,
     Profesional,
 )
-from app.services.oci_storage_service import PersistenciaOCIError
+from app.services.oci_storage_service import ESTADOS_A_PREFIJO, PersistenciaOCIError
 
 SAMPLES_DIR = Path(__file__).resolve().parents[1] / "samples" / "entradas"
 
@@ -51,7 +51,9 @@ class FakeOCIStorageService:
     def upload_resultado(self, documento_id, estado, resultado):
         if self._fallar_upload_resultado:
             raise PersistenciaOCIError("fallo simulado de OCI")
-        object_name = f"{estado}/{documento_id}.json"
+        # Mismo mapeo estado -> carpeta que el servicio real (KeyError si la
+        # ruta intentara persistir un estado que no existe).
+        object_name = f"{ESTADOS_A_PREFIJO[estado]}{documento_id}.json"
         self.resultados_subidos.append((documento_id, estado, resultado))
         return object_name
 
@@ -111,7 +113,7 @@ def test_post_documentos_exitoso_persiste_en_estandar(monkeypatch):
     body = response.json()
     assert body["estado"] == "estandar"
     assert body["persistencia_ok"] is True
-    assert body["oci_object_name_resultado"] == "estandar/DOC-TEST-001.json"
+    assert body["oci_object_name_resultado"] == "procesados/estandar/DOC-TEST-001.json"
     # La respuesta HTTP mantiene su forma previa (compatibilidad hacia atrás).
     assert body["validacion"]["validacion_ok"] is True
 
@@ -195,10 +197,18 @@ def test_post_documentos_excepcion_en_el_grafo_persiste_en_errores_tecnicos(monk
         # Sin destino_principal (MF-11 no integrado): fallback por validacion_ok.
         (True, False, None, "estandar"),
         (False, False, None, "revision_humana"),
-        # Valor desconocido o "error_tecnico" no se aceptan: también fallback.
-        (True, False, "cualquier_cosa", "estandar"),
+        # Cualquier valor que no sea exactamente uno de los 3 del contrato
+        # (mayúsculas, acentos, espacios, "error_tecnico", otro texto) va a
+        # revision_humana, aunque la validación haya dado bien.
+        (True, False, "cualquier_cosa", "revision_humana"),
         (False, False, "cualquier_cosa", "revision_humana"),
-        (True, False, "error_tecnico", "estandar"),
+        (True, False, "error_tecnico", "revision_humana"),
+        (True, False, "Urgente", "revision_humana"),
+        (True, False, "URGENTE", "revision_humana"),
+        (True, False, " urgente", "revision_humana"),
+        (True, False, "estándar", "revision_humana"),
+        (True, False, "revision humana", "revision_humana"),
+        (True, False, "", "revision_humana"),
     ],
 )
 def test_determinar_estado(validacion_ok, hubo_excepcion, destino_principal, esperado):
@@ -258,6 +268,10 @@ def test_post_documentos_con_destino_principal_de_mf11(
     assert body["estado"] == destino_principal
     assert body["persistencia_ok"] is True
 
+    assert body["oci_object_name_resultado"] == (
+        f"procesados/{destino_principal}/DOC-TEST-MF11.json"
+    )
+
     _, estado, resultado = fake_storage.resultados_subidos[0]
     assert estado == destino_principal
     assert resultado["estado"] == destino_principal
@@ -269,20 +283,69 @@ def test_post_documentos_con_destino_principal_de_mf11(
     assert resultado["resultado"]["requiere_auditoria_humana"] is requiere_auditoria_humana
 
 
-def test_post_documentos_destino_principal_desconocido_usa_fallback(monkeypatch):
+def test_post_documentos_urgente_true_con_destino_revision_humana(monkeypatch):
+    """Contrato de MF-11: un documento puede ser urgente y a la vez requerir
+    revisión humana. Va a revision_humana, pero `urgente` se conserva en
+    True (no se pisa) y requiere_auditoria_humana se guarda tal cual."""
+
     monkeypatch.setattr(
-        routes, "grafo_mediflow", GrafoFalso({"destino_principal": "no_existe"})
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "destino_principal": "revision_humana",
+            "urgente": True,
+            "requiere_auditoria_humana": True,
+        }),
     )
     fake_storage = FakeOCIStorageService()
     client = _crear_client(monkeypatch, fake_storage)
 
-    response = _enviar_documento(client, documento_id="DOC-TEST-MF11-X")
+    response = _enviar_documento(client, documento_id="DOC-TEST-MF11-URG")
 
     assert response.status_code == 200
-    assert response.json()["estado"] == "estandar"
+    body = response.json()
+    assert body["estado"] == "revision_humana"
+    assert body["oci_object_name_resultado"] == (
+        "procesados/revision_humana/DOC-TEST-MF11-URG.json"
+    )
+
     _, estado, resultado = fake_storage.resultados_subidos[0]
-    assert estado == "estandar"
-    assert "urgente" not in resultado
+    assert estado == "revision_humana"
+    assert resultado["urgente"] is True
+    assert resultado["resultado"]["urgente"] is True
+    assert resultado["resultado"]["destino_principal"] == "revision_humana"
+    assert resultado["resultado"]["requiere_auditoria_humana"] is True
+
+
+def test_post_documentos_destino_principal_desconocido_va_a_revision_humana(
+    monkeypatch, caplog
+):
+    """Un valor fuera del contrato (p. ej. "Urgente" con mayúscula) no debe
+    terminar en estandar: se deriva a revision_humana y se loguea."""
+
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({"destino_principal": "Urgente", "urgente": True}),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    with caplog.at_level("WARNING", logger="mediflow.app.api.routes"):
+        response = _enviar_documento(client, documento_id="DOC-TEST-MF11-X")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estado"] == "revision_humana"
+    assert body["oci_object_name_resultado"] == (
+        "procesados/revision_humana/DOC-TEST-MF11-X.json"
+    )
+    _, estado, resultado = fake_storage.resultados_subidos[0]
+    assert estado == "revision_humana"
+    # El valor original se persiste tal cual para poder auditarlo.
+    assert resultado["resultado"]["destino_principal"] == "Urgente"
+    assert resultado["urgente"] is True
+    assert any("destino_principal desconocido" in r.getMessage() for r in caplog.records)
 
 
 def test_post_documentos_tipo_no_soportado_no_persiste_nada(monkeypatch):
