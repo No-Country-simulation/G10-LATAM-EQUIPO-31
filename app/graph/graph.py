@@ -23,7 +23,7 @@ from app.schemas.clasificacion import Classification
 from app.schemas.extraccion import ExtraccionClinica
 
 # Nodos del Sprint 2
-from app.graph.consistencia import nodo_validacion_consistencia
+from app.graph.validation import validar_consistencia_clinica
 from app.graph.confianza import nodo_evaluacion_confianza
 from app.graph.routing import nodo_routing_condicional
 
