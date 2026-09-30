@@ -302,10 +302,25 @@ async def recibir_documento(
 
     clasificacion_persistida = estado_completo.get("clasificacion") if estado_completo else None
     resumen = {
+        # Autoevaluación cruda del modelo (MF-05/MF-06), un solo número de
+        # Gemini -- se mantiene aparte de score_confianza_final (MF-10):
+        # responde una pregunta distinta ("qué pensó el modelo" vs. "en
+        # qué confiamos al final", ya combinado con reglas de completitud).
         "score_confianza_clasificacion": (
             clasificacion_persistida.get("score_confianza_clasificacion")
             if clasificacion_persistida
             else None
+        ),
+        # MF-10: score combinado (autoevaluación + completitud/consistencia)
+        # y su categoría ("Alta"/"Media"/"Baja") -- es la señal que
+        # nodo_routing_condicional (MF-11) usa para decidir destino_principal.
+        # Mismo criterio que destino_principal: solo si el estado las trae,
+        # sin inventar un valor cuando MF-10 todavía no está integrado.
+        "score_confianza_final": (
+            estado_completo.get("score_confianza_final") if estado_completo else None
+        ),
+        "categoria_confianza": (
+            estado_completo.get("categoria_confianza") if estado_completo else None
         ),
         "destino_principal": destino_principal,
         "requiere_auditoria_humana": (

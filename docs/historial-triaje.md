@@ -42,6 +42,8 @@ trae), más dos bloques que agrega MF-15:
   "...": "... (todo el envelope de MF-13, sin cambios) ...",
   "resumen": {
     "score_confianza_clasificacion": 0.93,
+    "score_confianza_final": null,
+    "categoria_confianza": null,
     "destino_principal": null,
     "requiere_auditoria_humana": null,
     "validacion_ok": true
@@ -59,9 +61,24 @@ trae), más dos bloques que agrega MF-15:
 ```
 
 - **`resumen`** — un resumen aplanado, para no tener que bucear dentro de
-  `resultado` para lo más consultado: confianza de la clasificación,
-  destino de routing y si requiere revisión humana (ambos `null` hasta
-  que MF-11 esté integrado), y si la validación pasó.
+  `resultado` para lo más consultado:
+  - `score_confianza_clasificacion`: la autoevaluación cruda del modelo
+    (MF-05/MF-06), un solo número de Gemini.
+  - `score_confianza_final` / `categoria_confianza` (MF-10): el score ya
+    combinado con las reglas de completitud/consistencia, y su categoría
+    ("Alta"/"Media"/"Baja") — es la señal que `nodo_routing_condicional`
+    (MF-11) usa para decidir `destino_principal`. `null` hasta que MF-10
+    esté integrado; no se inventan ni se recalculan acá, se copian tal
+    cual del estado, mismo criterio que `destino_principal`.
+  - `destino_principal` / `requiere_auditoria_humana` (MF-11): destino de
+    routing y si requiere revisión humana. `null` hasta que MF-11 esté
+    integrado.
+  - `validacion_ok`: si la validación estructural (Sprint 1) pasó.
+
+  `score_confianza_clasificacion` y `score_confianza_final` se mantienen
+  ambos porque responden preguntas distintas: uno es "qué pensó el
+  modelo" (autoevaluación cruda), el otro es "en qué confiamos al final"
+  (ya ponderado con completitud/consistencia). Ninguno pisa al otro.
 - **`recorrido`** — el paso a paso de la corrida:
   - `agentes_ejecutados`: qué nodos del grafo llegaron a correr.
   - `proveedor_modelo` / `fallback_utilizado`: **ver limitación
@@ -147,7 +164,10 @@ respuesta de `POST /documentos` suma `historial_ok` y
   `agentes_ejecutados` vacío), que un fallo al guardar el historial no
   tumba la respuesta, y los dos casos de `agentes_ejecutados` cuando
   falla el clasificador total (excluye extractor) vs. cuando falla el
-  extractor total (lo incluye, porque sí llegó a correr).
+  extractor total (lo incluye, porque sí llegó a correr), que sin MF-10
+  integrado `score_confianza_final`/`categoria_confianza` quedan en
+  `null`, y que cuando el estado los trae se copian tal cual al resumen
+  (manteniendo `score_confianza_clasificacion` en paralelo, sin pisarlo).
 - `samples/test_oci_historial.py` — script manual contra el bucket real
   (Gemini y Groq simulados, sin claves de modelos), con los 8 archivos
   de `samples/entradas/`: reprocesa cada uno dos veces y confirma -contra

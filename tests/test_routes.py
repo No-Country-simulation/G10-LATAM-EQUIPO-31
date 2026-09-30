@@ -6,6 +6,7 @@ resultado en OCI (MF-13). Los agentes del grafo y el servicio de OCI se
 mockean/reemplazan para no depender de Gemini ni de credenciales reales,
 siguiendo el mismo patrón que tests/test_graph.py.
 """
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -164,6 +165,10 @@ def test_post_documentos_exitoso_persiste_en_estandar(monkeypatch):
     assert evento["recorrido"]["fallos_tecnicos"] is None
     assert evento["resumen"]["validacion_ok"] is True
     assert evento["resumen"]["score_confianza_clasificacion"] == 0.95
+    # MF-10 todavía no está integrado en esta rama: sin destino_principal,
+    # score_confianza_final/categoria_confianza tampoco se inventan.
+    assert evento["resumen"]["score_confianza_final"] is None
+    assert evento["resumen"]["categoria_confianza"] is None
     assert estado_persistido["validacion_ok"] is True
     assert estado_persistido["errores_validacion"] == []
     assert resultado["oci_object_name_original"] == fake_storage.documentos_subidos[0]
@@ -574,11 +579,28 @@ def test_post_documentos_fallo_al_guardar_original_devuelve_503_estructurado(mon
 
 def test_post_documentos_reprocesado_dos_veces_historial_no_se_pisa(monkeypatch):
     """A diferencia de procesados/ (que pisa), cada corrida debe quedar
-    como un evento nuevo en el historial."""
+    como un evento nuevo en el historial.
+
+    `datetime.now()` real puede devolver el MISMO microsegundo en dos
+    llamadas consecutivas si la máquina es rápida (pasó en la práctica),
+    lo que haría flaky esta prueba -- se controla el reloj de routes.py
+    para garantizar dos instantes distintos sin depender de la velocidad
+    de ejecución."""
+
+    momentos = iter([
+        datetime(2026, 1, 1, 12, 0, 0, 0, tzinfo=timezone.utc),
+        datetime(2026, 1, 1, 12, 0, 0, 1, tzinfo=timezone.utc),
+    ])
+
+    class _DatetimeControlado(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return next(momentos)
 
     _configurar_agentes_mock(monkeypatch)
     fake_storage = FakeOCIStorageService()
     client = _crear_client(monkeypatch, fake_storage)
+    monkeypatch.setattr(routes, "datetime", _DatetimeControlado)
 
     respuesta_1 = _enviar_documento(client, documento_id="DOC-TEST-HIST-001")
     respuesta_2 = _enviar_documento(client, documento_id="DOC-TEST-HIST-001")
@@ -723,3 +745,37 @@ def test_post_documentos_extractor_falla_total_incluye_extractor_en_agentes_ejec
         "clasificador", "extractor", "validacion_pydantic",
     ]
     assert "extraccion" in evento["resultado"]
+
+
+def test_post_documentos_con_confianza_de_mf10_historial_incluye_resumen(monkeypatch):
+    """Cuando el estado trae categoria_confianza/score_confianza_final
+    (MF-10), el resumen del historial los copia tal cual -- mismo criterio
+    que destino_principal (MF-11): ni se inventan ni se recalculan acá."""
+
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "destino_principal": "revision_humana",
+            "urgente": False,
+            "requiere_auditoria_humana": True,
+            "categoria_confianza": "Media",
+            "score_confianza_final": 0.7,
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-006")
+
+    assert response.status_code == 200
+    assert response.json()["estado"] == "revision_humana"
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["resumen"]["categoria_confianza"] == "Media"
+    assert evento["resumen"]["score_confianza_final"] == 0.7
+    # score_confianza_clasificacion (la autoevaluación cruda) se mantiene
+    # en paralelo, no se pisa con score_confianza_final.
+    assert evento["resumen"]["score_confianza_clasificacion"] == 0.95
+    assert evento["resumen"]["destino_principal"] == "revision_humana"
