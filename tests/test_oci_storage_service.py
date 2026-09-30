@@ -10,6 +10,7 @@ Ejecutar desde la raíz del repositorio:
     pytest tests/test_oci_storage_service.py -v
 """
 import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -205,3 +206,98 @@ def test_upload_resultado_detecta_verificacion_fallida(service, monkeypatch):
 
     with pytest.raises(PersistenciaOCIError):
         service.upload_resultado("DOC-2026-RES005", "estandar", {"x": 1})
+
+
+# --- MF-15: historial de triaje ---------------------------------------------
+
+MOMENTO_PRUEBA = datetime(2026, 9, 30, 15, 30, 12, 456789, tzinfo=timezone.utc)
+
+
+def test_upload_historial_devuelve_object_name_con_prefijo_historial(service):
+    object_name = service.upload_historial(
+        "DOC-2026-HIST001", MOMENTO_PRUEBA, {"documento_id": "DOC-2026-HIST001"}
+    )
+
+    assert object_name == "historial/DOC-2026-HIST001/20260930T153012456789.json"
+
+
+def test_upload_y_get_historial_recuperan_el_mismo_contenido(service):
+    evento = {"documento_id": "DOC-2026-HIST002", "estado": "estandar", "resumen": {"x": 1}}
+
+    object_name = service.upload_historial("DOC-2026-HIST002", MOMENTO_PRUEBA, evento)
+    recuperado = service.get_historial(object_name)
+
+    assert recuperado == evento
+
+
+def test_upload_historial_dos_momentos_distintos_no_se_pisan(service):
+    """El mismo documento_id, reprocesado, debe generar DOS objetos
+    distintos (a diferencia de upload_resultado, que pisa)."""
+
+    momento_1 = MOMENTO_PRUEBA
+    momento_2 = MOMENTO_PRUEBA + timedelta(seconds=1)
+
+    object_name_1 = service.upload_historial(
+        "DOC-2026-HIST003", momento_1, {"intento": 1}
+    )
+    object_name_2 = service.upload_historial(
+        "DOC-2026-HIST003", momento_2, {"intento": 2}
+    )
+
+    assert object_name_1 != object_name_2
+    assert service.get_historial(object_name_1) == {"intento": 1}
+    assert service.get_historial(object_name_2) == {"intento": 2}
+
+
+def test_upload_historial_sanitiza_documento_id(service):
+    """El documento_id no debe permitir traversal de rutas dentro del bucket."""
+
+    object_name = service.upload_historial(
+        "../../etc/passwd", MOMENTO_PRUEBA, {"x": 1}
+    )
+
+    assert object_name == "historial/passwd/20260930T153012456789.json"
+
+
+def test_upload_historial_no_toca_procesados_ni_recibidos(service):
+    """Guardar un evento de historial no debe crear ni modificar nada bajo
+    recibidos/ ni procesados/*."""
+
+    service.upload_document("DOC-2026-HIST004", b"original", "informe.pdf")
+    service.upload_resultado("DOC-2026-HIST004", "estandar", {"x": 1})
+    service.upload_historial("DOC-2026-HIST004", MOMENTO_PRUEBA, {"y": 2})
+
+    claves_historial = [
+        clave for clave in service._client._objetos if clave[2].startswith("historial/")
+    ]
+    assert claves_historial == [
+        (
+            "fake-namespace",
+            "documentos-clinicos",
+            "historial/DOC-2026-HIST004/20260930T153012456789.json",
+        )
+    ]
+
+
+def test_upload_historial_propaga_fallo_de_oci_como_persistencia_error(service, monkeypatch):
+    def put_object_falla(*args, **kwargs):
+        raise RuntimeError("bucket no disponible")
+
+    monkeypatch.setattr(service._client, "put_object", put_object_falla)
+
+    with pytest.raises(PersistenciaOCIError):
+        service.upload_historial("DOC-2026-HIST005", MOMENTO_PRUEBA, {"x": 1})
+
+
+def test_upload_historial_detecta_verificacion_fallida(service, monkeypatch):
+    original_get_object = service._client.get_object
+
+    def get_object_corrupto(*args, **kwargs):
+        respuesta = original_get_object(*args, **kwargs)
+        respuesta.data.content = b"contenido corrupto"
+        return respuesta
+
+    monkeypatch.setattr(service._client, "get_object", get_object_corrupto)
+
+    with pytest.raises(PersistenciaOCIError):
+        service.upload_historial("DOC-2026-HIST006", MOMENTO_PRUEBA, {"x": 1})

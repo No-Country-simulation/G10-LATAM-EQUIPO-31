@@ -35,11 +35,18 @@ class FakeOCIStorageService:
     """Reemplaza a OCIStorageService en las pruebas de la ruta: guarda en
     memoria lo que la ruta intentó persistir, sin tocar OCI real."""
 
-    def __init__(self, fallar_upload_resultado=False, fallar_upload_document=False):
+    def __init__(
+        self,
+        fallar_upload_resultado=False,
+        fallar_upload_document=False,
+        fallar_upload_historial=False,
+    ):
         self.documentos_subidos = []
         self.resultados_subidos = []
+        self.historial_subido = []
         self._fallar_upload_resultado = fallar_upload_resultado
         self._fallar_upload_document = fallar_upload_document
+        self._fallar_upload_historial = fallar_upload_historial
 
     def upload_document(self, document_id, content, filename):
         if self._fallar_upload_document:
@@ -55,6 +62,17 @@ class FakeOCIStorageService:
         # ruta intentara persistir un estado que no existe).
         object_name = f"{ESTADOS_A_PREFIJO[estado]}{documento_id}.json"
         self.resultados_subidos.append((documento_id, estado, resultado))
+        return object_name
+
+    def upload_historial(self, documento_id, momento, evento):
+        if self._fallar_upload_historial:
+            raise PersistenciaOCIError("fallo simulado de OCI (historial)")
+        # No reproduce el formato exacto del object_name real (eso ya lo
+        # prueba tests/test_oci_storage_service.py contra el servicio de
+        # verdad); acá solo hace falta que sea único por momento, para
+        # poder comprobar que un reproceso no pisa el anterior.
+        object_name = f"historial/{documento_id}/{momento.isoformat()}.json"
+        self.historial_subido.append((documento_id, momento, evento))
         return object_name
 
 
@@ -132,6 +150,20 @@ def test_post_documentos_exitoso_persiste_en_estandar(monkeypatch):
     # campos elegidos a mano.
     estado_persistido = resultado["resultado"]
     assert estado_persistido["extraccion"]["nivel_urgencia"] == "no_urgente"
+
+    # MF-15: además de procesados/, el mismo procesamiento queda registrado
+    # como un evento de historial (clasificador + extractor + validación
+    # corrieron los tres, sin fallas técnicas).
+    assert body["historial_ok"] is True
+    assert body["oci_object_name_historial"] is not None
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["agentes_ejecutados"] == [
+        "clasificador", "extractor", "validacion_pydantic",
+    ]
+    assert evento["recorrido"]["fallos_tecnicos"] is None
+    assert evento["resumen"]["validacion_ok"] is True
+    assert evento["resumen"]["score_confianza_clasificacion"] == 0.95
     assert estado_persistido["validacion_ok"] is True
     assert estado_persistido["errores_validacion"] == []
     assert resultado["oci_object_name_original"] == fake_storage.documentos_subidos[0]
@@ -450,6 +482,7 @@ def test_post_documentos_tipo_no_soportado_no_persiste_nada(monkeypatch):
     assert response.status_code == 415
     assert fake_storage.documentos_subidos == []
     assert fake_storage.resultados_subidos == []
+    assert fake_storage.historial_subido == []
 
 
 def test_post_documentos_fallo_de_persistencia_no_tumba_la_respuesta(monkeypatch):
@@ -505,6 +538,15 @@ def test_post_documentos_formatos_binarios_de_samples_entradas(
     assert "contenido_bytes" not in documento_persistido
     assert "documento_texto" not in documento_persistido
 
+    # MF-15: el evento de historial reusa el mismo estado_completo
+    # serializado, así que hereda gratis la misma exclusión de contenido
+    # pesado.
+    assert body["historial_ok"] is True
+    _, _, evento = fake_storage.historial_subido[0]
+    documento_en_historial = evento["resultado"]["documento"]
+    assert "contenido_bytes" not in documento_en_historial
+    assert "documento_texto" not in documento_en_historial
+
 
 def test_post_documentos_fallo_al_guardar_original_devuelve_503_estructurado(monkeypatch):
     """Si falla la subida del documento ORIGINAL, no tiene sentido correr el
@@ -524,3 +566,160 @@ def test_post_documentos_fallo_al_guardar_original_devuelve_503_estructurado(mon
 
     assert fake_storage.documentos_subidos == []
     assert fake_storage.resultados_subidos == []
+    assert fake_storage.historial_subido == []
+
+
+# --- MF-15: historial de triaje ---------------------------------------------
+
+
+def test_post_documentos_reprocesado_dos_veces_historial_no_se_pisa(monkeypatch):
+    """A diferencia de procesados/ (que pisa), cada corrida debe quedar
+    como un evento nuevo en el historial."""
+
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    respuesta_1 = _enviar_documento(client, documento_id="DOC-TEST-HIST-001")
+    respuesta_2 = _enviar_documento(client, documento_id="DOC-TEST-HIST-001")
+
+    assert respuesta_1.status_code == 200
+    assert respuesta_2.status_code == 200
+
+    # procesados/: sigue pisando, una sola entrada "viva" por documento_id
+    # en la lista del fake (semántica de sobrescritura, igual que el real).
+    assert len(fake_storage.resultados_subidos) == 2
+    assert fake_storage.resultados_subidos[0][0] == fake_storage.resultados_subidos[1][0]
+
+    # historial/: dos eventos distintos, ninguno se pisa.
+    assert len(fake_storage.historial_subido) == 2
+    object_name_1 = respuesta_1.json()["oci_object_name_historial"]
+    object_name_2 = respuesta_2.json()["oci_object_name_historial"]
+    assert object_name_1 is not None and object_name_2 is not None
+    assert object_name_1 != object_name_2
+
+
+def test_post_documentos_excepcion_en_el_grafo_historial_registra_sin_agentes_ejecutados(
+    monkeypatch,
+):
+    """Si el grafo crashea, no se puede saber con certeza en qué nodo
+    estaba -- el historial debe reflejar eso (lista vacía), no inventar
+    un recorrido."""
+
+    def clasificar_que_falla(_documento, **_kwargs):
+        raise RuntimeError("El proveedor Gemini no respondió (fallo técnico simulado)")
+
+    _configurar_agentes_mock(monkeypatch, clasificar=clasificar_que_falla)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-002")
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["estado"] == "error_tecnico"
+    assert body["historial_ok"] is True
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["agentes_ejecutados"] == []
+    assert evento["resultado"] is None
+    assert "RuntimeError" in evento["error"]
+
+
+def test_post_documentos_fallo_al_guardar_historial_no_tumba_la_respuesta(monkeypatch):
+    """Un fallo al guardar el HISTORIAL no debe afectar la respuesta ni la
+    persistencia en procesados/, que es independiente."""
+
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService(fallar_upload_historial=True)
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-003")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estado"] == "estandar"
+    assert body["persistencia_ok"] is True
+    assert body["oci_object_name_resultado"] == "procesados/estandar/DOC-TEST-HIST-003.json"
+    assert body["historial_ok"] is False
+    assert body["oci_object_name_historial"] is None
+    assert fake_storage.historial_subido == []
+
+
+class GrafoFalsoClasificadorFallaTotal:
+    """Simula el estado que MF-19 produce cuando el clasificador agota
+    Gemini y el fallback: el extractor NUNCA llega a correr (corta antes
+    de llamar a ningún LLM, ver app/graph/graph.py::nodo_extractor en la
+    rama de MF-19), así que el estado no tiene clave "extraccion"."""
+
+    def invoke(self, estado_inicial):
+        return {
+            **estado_inicial,
+            "clasificacion": CLASIFICACION_PRUEBA,
+            "fallos_tecnicos": [
+                "Clasificador: fallaron el modelo principal y el fallback."
+            ],
+            "validacion_ok": False,
+            "errores_validacion": [
+                "Clasificador: fallaron el modelo principal y el fallback.",
+                "No se generó un resultado de extracción.",
+            ],
+        }
+
+
+def test_post_documentos_clasificador_falla_total_excluye_extractor_de_agentes_ejecutados(
+    monkeypatch,
+):
+    monkeypatch.setattr(routes, "grafo_mediflow", GrafoFalsoClasificadorFallaTotal())
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-004")
+
+    assert response.status_code == 500
+    assert response.json()["estado"] == "error_tecnico"
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["agentes_ejecutados"] == [
+        "clasificador", "validacion_pydantic",
+    ]
+    assert "extraccion" not in evento["resultado"]
+
+
+def test_post_documentos_extractor_falla_total_incluye_extractor_en_agentes_ejecutados(
+    monkeypatch,
+):
+    """Complemento del test anterior: si el clasificador SÍ tuvo éxito y es
+    el EXTRACTOR el que agota todo, sí llegó a correr (devuelve una
+    extracción degradada) -- no debe excluirse de agentes_ejecutados solo
+    porque fallos_tecnicos esté poblado."""
+
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "fallos_tecnicos": [
+                "Extractor: fallaron el modelo principal y el fallback."
+            ],
+            "validacion_ok": False,
+            "errores_validacion": [
+                "Extractor: fallaron el modelo principal y el fallback."
+            ],
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-005")
+
+    assert response.status_code == 500
+    assert response.json()["estado"] == "error_tecnico"
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["agentes_ejecutados"] == [
+        "clasificador", "extractor", "validacion_pydantic",
+    ]
+    assert "extraccion" in evento["resultado"]

@@ -1,12 +1,15 @@
 import json
 import os
 import re
+from datetime import datetime
+
 import oci
 from dotenv import load_dotenv
 
 load_dotenv()
 
 RECIBIDOS_PREFIX = "recibidos/"
+HISTORIAL_PREFIX = "historial/"
 
 ESTADO_ERROR_TECNICO = "error_tecnico"
 
@@ -46,6 +49,23 @@ def _object_name_resultado(documento_id: str, estado: str) -> str:
         )
     documento_id_seguro = _sanitizar_nombre_archivo(documento_id)
     return f"{ESTADOS_A_PREFIJO[estado]}{documento_id_seguro}.json"
+
+
+def _id_temporal(momento: datetime) -> str:
+    """
+    Convierte un datetime en un identificador de archivo seguro y
+    ordenable cronológicamente por nombre (año-mes-día-hora-minuto-
+    segundo-microsegundos, sin separadores: p. ej. 20260930T153012456789).
+    Se usa como nombre de archivo del historial (MF-15) en vez del ISO
+    8601 con separadores (":", "+"), que `_sanitizar_nombre_archivo`
+    convertiría en guiones bajos poco legibles.
+    """
+    return momento.strftime("%Y%m%dT%H%M%S%f")
+
+
+def _object_name_historial(documento_id: str, id_temporal: str) -> str:
+    documento_id_seguro = _sanitizar_nombre_archivo(documento_id)
+    return f"{HISTORIAL_PREFIX}{documento_id_seguro}/{id_temporal}.json"
 
 
 class OCIStorageService:
@@ -131,5 +151,57 @@ class OCIStorageService:
     def get_resultado(self, documento_id: str, estado: str) -> dict:
         """Recupera y deserializa el resultado guardado para documento_id/estado."""
         object_name = _object_name_resultado(documento_id, estado)
+        contenido = self.get_document(object_name)
+        return json.loads(contenido.decode("utf-8"))
+
+    def upload_historial(self, documento_id: str, momento: datetime, evento: dict) -> str:
+        """
+        Guarda un EVENTO de historial de triaje (MF-15) bajo
+        `historial/{documento_id}/{momento}.json`. A diferencia de
+        `upload_resultado` (que pisa el resultado anterior del mismo
+        documento_id), cada llamada con un `momento` distinto crea un
+        objeto nuevo: el historial de reprocesos se conserva completo.
+
+        Mismo patrón de verificación que `upload_resultado`: sube y
+        vuelve a leer inmediatamente: si la subida falla o el contenido
+        recuperado no coincide, levanta PersistenciaOCIError.
+        """
+        object_name = _object_name_historial(documento_id, _id_temporal(momento))
+        contenido = json.dumps(evento, ensure_ascii=False, default=str).encode("utf-8")
+
+        try:
+            self._client.put_object(
+                namespace_name=self._namespace,
+                bucket_name=self._bucket_name,
+                object_name=object_name,
+                put_object_body=contenido,
+            )
+            recuperado = self._client.get_object(
+                namespace_name=self._namespace,
+                bucket_name=self._bucket_name,
+                object_name=object_name,
+            ).data.content
+        except Exception as exc:
+            raise PersistenciaOCIError(
+                f"No se pudo guardar/verificar el evento de historial de "
+                f"documento_id={documento_id!r} en OCI: {exc}"
+            ) from exc
+
+        if recuperado != contenido:
+            raise PersistenciaOCIError(
+                f"Verificación de escritura falló para {object_name}: "
+                "el contenido recuperado no coincide con el enviado."
+            )
+
+        return object_name
+
+    def get_historial(self, object_name: str) -> dict:
+        """
+        Recupera y deserializa un evento de historial ya guardado, a
+        partir del `object_name` devuelto por `upload_historial` (no se
+        reconstruye desde documento_id/momento: evita un desfasaje de
+        microsegundos entre el momento de guardar y el de reconstruir
+        el nombre del archivo).
+        """
         contenido = self.get_document(object_name)
         return json.loads(contenido.decode("utf-8"))

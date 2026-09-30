@@ -247,10 +247,15 @@ async def recibir_documento(
         # nodo), así que no se puede asumir que cada elemento ya sea str.
         error_persistido = "; ".join(str(fallo) for fallo in fallos_tecnicos)
 
+    # Un único timestamp para todo lo que se persiste de esta corrida: el
+    # campo `timestamp` del envelope y el nombre de archivo del evento de
+    # historial (MF-15, paso 7b) tienen que referirse al mismo instante.
+    momento = datetime.now(timezone.utc)
+
     envelope = {
         "documento_id": documento_id,
         "estado": estado,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": momento.isoformat(),
         "oci_object_name_original": object_name,
         "nivel_urgencia": nivel_urgencia,
         "resultado": estado_completo,
@@ -276,6 +281,72 @@ async def recibir_documento(
         oci_object_name_resultado = None
         persistencia_ok = False
 
+    # 7b. Historial de triaje (MF-15): a diferencia de `procesados/*`, que
+    #     guarda solo el ÚLTIMO resultado conocido, acá cada corrida queda
+    #     como un evento nuevo bajo `historial/{documento_id}/`, sin pisar
+    #     las anteriores (ver docs/historial-triaje.md).
+    agentes_ejecutados: list[str] = []
+    if estado_completo is not None:
+        agentes_ejecutados.append("clasificador")
+        # MF-19: el nodo extractor corta ANTES de llamar a ningún LLM si
+        # el clasificador ya agotó Gemini y el fallback (no tiene sentido
+        # gastar cuota del Extractor sin una clasificación válida) -- ver
+        # app/graph/graph.py::nodo_extractor. Cuando eso pasa, el estado
+        # nunca llega a tener la clave "extraccion". Si el extractor SÍ
+        # corrió (con éxito o degradado por su propio fallo técnico),
+        # "extraccion" está presente sin importar fallos_tecnicos.
+        extractor_omitido = bool(fallos_tecnicos) and "extraccion" not in estado_completo
+        if not extractor_omitido:
+            agentes_ejecutados.append("extractor")
+        agentes_ejecutados.append("validacion_pydantic")
+
+    clasificacion_persistida = estado_completo.get("clasificacion") if estado_completo else None
+    resumen = {
+        "score_confianza_clasificacion": (
+            clasificacion_persistida.get("score_confianza_clasificacion")
+            if clasificacion_persistida
+            else None
+        ),
+        "destino_principal": destino_principal,
+        "requiere_auditoria_humana": (
+            estado_completo.get("requiere_auditoria_humana") if estado_completo else None
+        ),
+        "validacion_ok": validacion_ok,
+    }
+
+    # `proveedor_modelo`/`fallback_utilizado`: MF-19 todavía no expone en
+    # el estado qué proveedor/modelo produjo el resultado final cuando SÍ
+    # hay éxito (solo se sabe con certeza cuando fallan TODOS, vía
+    # `fallos_tecnicos`); se deja constancia explícita en vez de inventar
+    # el dato.
+    recorrido = {
+        "agentes_ejecutados": agentes_ejecutados,
+        "proveedor_modelo": {
+            "clasificador": "no_disponible (pendiente de que MF-19 lo exponga en el estado)",
+            "extractor": "no_disponible (pendiente de que MF-19 lo exponga en el estado)",
+        },
+        "fallback_utilizado": "no_disponible (pendiente de que MF-19 lo exponga en el estado)",
+        "fallos_tecnicos": fallos_tecnicos,
+    }
+
+    evento_historial = {**envelope, "resumen": resumen, "recorrido": recorrido}
+
+    try:
+        oci_object_name_historial = storage.upload_historial(
+            documento_id, momento, evento_historial
+        )
+        historial_ok = True
+    except PersistenciaOCIError as exc:
+        # Igual que con upload_resultado: un fallo acá no debe tirar abajo
+        # una respuesta cuyo procesamiento (y persistencia en procesados/)
+        # sí fue exitoso.
+        logger.error(
+            "No se pudo guardar el historial de triaje de documento_id=%s: %s",
+            documento_id, exc,
+        )
+        oci_object_name_historial = None
+        historial_ok = False
+
     # 8. Construir la respuesta del flujo integrado
     respuesta = {
         "status": "error" if es_error_tecnico else "procesado",
@@ -287,6 +358,8 @@ async def recibir_documento(
         "estado": estado,
         "persistencia_ok": persistencia_ok,
         "oci_object_name_resultado": oci_object_name_resultado,
+        "historial_ok": historial_ok,
+        "oci_object_name_historial": oci_object_name_historial,
         **cuerpo_resultado,
         "mensaje": (
             "Fallo técnico al procesar el documento"
