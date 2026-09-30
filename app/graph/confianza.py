@@ -2,7 +2,7 @@
 app/graph/confianza.py
 
 Nodo de Evaluación de Confianza — MF-10.
-Responsable: 
+Responsable: Jennifer Silva
 
 Implementa el criterio documentado en docs/MF-10-criterio-confianza.md:
 combina la autoevaluación del modelo (Classification.score_confianza_clasificacion)
