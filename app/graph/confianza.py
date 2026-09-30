@@ -33,7 +33,13 @@ def _calcular_score_reglas(motivos: list[str]) -> float:
     return round(max(0.0, 1.0 - penalizacion), 2)
 
 
-def _categoria(score: float) -> str:
+def _categoria(score: float, tiene_inconsistencias: bool = False) -> str:
+    """
+    Determina la categoría de confianza (Alta, Media, Baja).
+    Si existen inconsistencias o errores, degrada automáticamente a 'Media' o 'Baja'.
+    """
+    if tiene_inconsistencias and score >= UMBRAL_ALTA:
+        return "Media"
     if score >= UMBRAL_ALTA:
         return "Alta"
     if score >= UMBRAL_MEDIA:
@@ -55,7 +61,7 @@ def nodo_evaluacion_confianza(
     TypedDict sin defaults en tiempo de ejecución.
     """
     clasificacion = state.get("clasificacion")
-    extraccion = state.get("extraccion")
+    extraccion = state.get("extraccion") or state.get("extraction")
 
     score_autoeval = (
         clasificacion.score_confianza_clasificacion if clasificacion is not None else 0.0
@@ -70,8 +76,10 @@ def nodo_evaluacion_confianza(
 
     score_final = round((score_autoeval * peso_modelo) + (score_reglas * peso_reglas), 2)
 
+    tiene_inconsistencias = bool(errores_estructurales or inconsistencias_mf09)
+
     return {
         "score_confianza_final": score_final,
-        "categoria_confianza": _categoria(score_final),
+        "categoria_confianza": _categoria(score_final, tiene_inconsistencias),
         "motivos_confianza": motivos if motivos else ["Sin inconsistencias detectadas"],
     }
