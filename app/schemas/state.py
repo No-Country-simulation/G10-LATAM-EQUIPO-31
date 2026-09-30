@@ -48,3 +48,29 @@ class MediFlowState(TypedDict, total=False):
     # Resultado de la validación estructural del Sprint 1.
     validacion_ok: bool
     errores_validacion: list[str]
+
+    # --- MF-09: Validación de consistencia ---
+    # Lista de mensajes en texto simple, uno por cada inconsistencia
+    # detectada (ej. formato de CIE-10 inválido, edad fuera de rango).
+    # AUSENTE hasta que nodo_validacion_consistencia lo agregue -> usar .get().
+    inconsistencias: list[str]
+
+    # --- MF-10: Evaluación de confianza ---
+    # Combina clasificacion.score_confianza_clasificacion (autoevaluación
+    # del modelo) con extraccion.campos_no_encontrados + errores_validacion
+    # + inconsistencias (reglas de completitud y consistencia),
+    # AUSENTES hasta que nodo_evaluacion_confianza los agregue -> usar .get().
+    score_confianza_final: float
+    categoria_confianza: str  # "Alta" | "Media" | "Baja"
+    motivos_confianza: list[str]
+
+    # --- MF-11: Urgencia y routing ---
+    # destino_principal se usa directamente como carpeta en OCI (MF-13,
+    # Katherine): procesados/{destino_principal}/
+    # urgente: señal reconciliada entre clasificacion.nivel_prioridad y
+    # extraccion.nivel_urgencia, se conserva incluso si el documento termina en HITL.
+    # AUSENTES hasta que nodo_routing_condicional los agregue -> usar .get().
+    destino_principal: str  # "estandar" | "urgente" | "revision_humana"
+    requiere_auditoria_humana: bool
+    urgente: bool  # señal reconciliada; True incluso si destino_principal == "revision_humana"
+    justificacion_enrutamiento: str
