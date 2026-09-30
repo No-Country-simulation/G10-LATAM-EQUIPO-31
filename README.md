@@ -24,7 +24,7 @@ La arquitectura está orquestada con LangGraph y combina dos agentes especializa
 - **Evaluación de confianza:** calcula un score de confianza y detecta ambigüedad, inconsistencias o campos faltantes.
 - **Enrutamiento condicional:** deriva el documento a flujo estándar, cola de emergencia médica, o revisión humana (HITL), según urgencia y nivel de confianza.
 - **Fallback técnico:** ante fallos de la API del LLM (timeout, error 5xx, indisponibilidad), el sistema reintenta con un LLM alternativo antes de fallar.
-- **Persistencia:** los documentos originales y los resultados se almacenan en OCI Object Storage, organizados por estado (recibidos/, procesados/, auditoria_humana/).
+- **Persistencia:** los documentos originales se almacenan en `recibidos/`, y el resultado del flujo se persiste aparte según su destino (`procesados/estandar/`, `procesados/urgente/`, `procesados/revision_humana/`, `errores_tecnicos/`), vinculado al original por `documento_id`. Detalle en [docs/persistencia-resultados.md](docs/persistencia-resultados.md).
 
 ### Diagrama de arquitectura
 
@@ -60,7 +60,7 @@ G10-LATAM-EQUIPO-31/
 └── README.md
 ```
 
-`app/services/oci_storage_service.py` — servicio de conexión con OCI Object Storage (carga y recuperación de documentos), implementado y probado en MF-04.
+`app/services/oci_storage_service.py` — servicio de conexión con OCI Object Storage: carga y recuperación de documentos originales (MF-04), y persistencia del resultado del flujo por estado (MF-13, ver [docs/persistencia-resultados.md](docs/persistencia-resultados.md)).
 
 ## Configuración inicial del entorno
 
