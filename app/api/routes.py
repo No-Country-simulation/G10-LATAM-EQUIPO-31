@@ -57,6 +57,7 @@ def determinar_estado(
     validacion_ok: bool,
     hubo_excepcion: bool,
     destino_principal: str | None = None,
+    fallos_tecnicos: list | None = None,
 ) -> str:
     """
     Determina bajo cuál estado (ver ESTADOS_A_PREFIJO en
@@ -64,17 +65,24 @@ def determinar_estado(
 
     1. Si el grafo lanzó una excepción técnica real (proveedor/modelo, un
        nodo que falla) -> error_tecnico.
-    2. Si el estado trae un `destino_principal` válido (contrato de MF-11:
+    2. Si el estado trae `fallos_tecnicos` (campo que agrega MF-19) con al
+       menos un elemento -> error_tecnico también, aunque no haya habido
+       excepción: el grafo pudo capturar el fallo dentro de un nodo y seguir
+       corriendo, pero sigue siendo un fallo técnico real que no debe
+       enrutarse como si el documento se hubiese procesado bien. Tiene la
+       misma prioridad que una excepción real: manda por encima de
+       `destino_principal`.
+    3. Si el estado trae un `destino_principal` válido (contrato de MF-11:
        "estandar", "urgente" o "revision_humana") -> se usa tal cual.
-    3. Si trae un `destino_principal` que no es exactamente uno de esos 3
+    4. Si trae un `destino_principal` que no es exactamente uno de esos 3
        valores (mayúsculas, acentos, espacios, otro texto) -> revision_humana,
        con una advertencia en el log: ante la duda, un documento que podría
        ser urgente no debe terminar en estandar.
-    4. Si no trae `destino_principal` (MF-11 todavía no está integrado) ->
+    5. Si no trae `destino_principal` (MF-11 todavía no está integrado) ->
        fallback con la única señal disponible: validacion_ok False va a
        revision_humana, el resto a estandar.
     """
-    if hubo_excepcion:
+    if hubo_excepcion or fallos_tecnicos:
         return ESTADO_ERROR_TECNICO
     if destino_principal in DESTINOS_PRINCIPALES:
         return destino_principal
@@ -178,11 +186,22 @@ async def recibir_documento(
     hubo_excepcion = error_tecnico is not None
     validacion_ok = bool(resultado) and resultado.get("validacion_ok", False)
     destino_principal = resultado.get("destino_principal") if resultado else None
+    # `fallos_tecnicos` es un campo que agrega MF-19: el grafo puede
+    # capturar un fallo técnico dentro de un nodo y seguir corriendo, sin
+    # que eso dispare una excepción acá. No hay MediFlowState todavía con
+    # esta clave (ver app/schemas/state.py), así que se lee con .get() como
+    # el resto de los campos que MF-09/MF-10/MF-11 todavía no integran.
+    fallos_tecnicos = resultado.get("fallos_tecnicos") if resultado else None
     estado = determinar_estado(
         validacion_ok=validacion_ok,
         hubo_excepcion=hubo_excepcion,
         destino_principal=destino_principal,
+        fallos_tecnicos=fallos_tecnicos,
     )
+    # La respuesta HTTP (status/mensaje/código) sigue el mismo camino que ya
+    # usábamos para error_tecnico, tanto si vino de una excepción real como
+    # si vino de fallos_tecnicos (MF-19) sin excepción.
+    es_error_tecnico = estado == ESTADO_ERROR_TECNICO
 
     # 6. Serializar el estado COMPLETO que devolvió el grafo (para
     #    persistirlo tal cual, ver _serializar_estado_grafo) y armar el
@@ -245,7 +264,7 @@ async def recibir_documento(
 
     # 8. Construir la respuesta del flujo integrado
     respuesta = {
-        "status": "error" if hubo_excepcion else "procesado",
+        "status": "error" if es_error_tecnico else "procesado",
         "documento_id": documento_id,
         "canal_origen": canal_origen,
         "nombre_archivo": archivo.filename,
@@ -257,12 +276,12 @@ async def recibir_documento(
         **cuerpo_resultado,
         "mensaje": (
             "Fallo técnico al procesar el documento"
-            if hubo_excepcion
+            if es_error_tecnico
             else "Documento procesado correctamente por MediFlow"
         ),
     }
 
-    if hubo_excepcion:
+    if es_error_tecnico:
         return JSONResponse(status_code=500, content=respuesta)
 
     return respuesta

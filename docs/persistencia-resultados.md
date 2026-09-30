@@ -12,7 +12,7 @@ original por `documento_id`.
 | `procesados/estandar/` | Resultado de un documento enrutado al flujo estándar (`destino_principal = "estandar"`). |
 | `procesados/urgente/` | Resultado de un documento enrutado a la cola urgente (`destino_principal = "urgente"`). |
 | `procesados/revision_humana/` | Resultado de un documento que necesita revisión humana (`destino_principal = "revision_humana"`). |
-| `errores_tecnicos/` | Resultado (parcial) de un documento cuyo procesamiento falló por una excepción técnica real (proveedor/modelo, un nodo del grafo que crashea). |
+| `errores_tecnicos/` | Resultado (parcial o completo) de un documento cuyo procesamiento falló por una excepción técnica real (proveedor/modelo, un nodo del grafo que crashea), o cuyo estado trae `fallos_tecnicos` (MF-19) con al menos un elemento aunque el grafo no haya lanzado excepción. |
 
 El nombre de objeto para un resultado es siempre
 `{carpeta_del_estado}{documento_id}.json` (el `documento_id` se sanitiza con
@@ -36,19 +36,31 @@ el estado del grafo trae `destino_principal` (`"estandar"`, `"urgente"` o
 `requiere_auditoria_humana`.
 
 `app/api/routes.py` define
-`determinar_estado(validacion_ok, hubo_excepcion, destino_principal=None)`,
-que aplica estas reglas en orden:
+`determinar_estado(validacion_ok, hubo_excepcion, destino_principal=None,
+fallos_tecnicos=None)`, que aplica estas reglas en orden:
 
-1. **`error_tecnico`** — el grafo lanzó una excepción real durante su
-   ejecución (fallo del proveedor/modelo, un nodo que crashea de forma
-   inesperada). La respuesta HTTP también refleja el fallo (código 500).
-   Un tipo de archivo no soportado (`415`) **no** cuenta como error técnico:
-   se valida antes de tocar OCI o el grafo, y no genera ningún objeto en
-   `errores_tecnicos/`.
-2. **`destino_principal` válido** — si el estado del grafo trae
+1. **`error_tecnico` por excepción real** — el grafo lanzó una excepción
+   real durante su ejecución (fallo del proveedor/modelo, un nodo que
+   crashea de forma inesperada). La respuesta HTTP también refleja el
+   fallo (código 500). Un tipo de archivo no soportado (`415`) **no**
+   cuenta como error técnico: se valida antes de tocar OCI o el grafo, y
+   no genera ningún objeto en `errores_tecnicos/`.
+2. **`error_tecnico` por `fallos_tecnicos` (MF-19)** — si el estado del
+   grafo trae la clave `fallos_tecnicos` con **al menos un elemento**,
+   también se deriva a `error_tecnico`, aunque el grafo no haya lanzado
+   ninguna excepción (un nodo puede capturar el fallo internamente y
+   dejar que el flujo siga). Tiene la misma prioridad que una excepción
+   real: manda por encima de `destino_principal`, y la respuesta HTTP es
+   la misma que para el caso 1 (código 500, `status: "error"`,
+   `mensaje: "Fallo técnico al procesar el documento"`). A diferencia del
+   caso 1, acá sí hay `resultado` (el grafo terminó de correr), así que el
+   envelope persiste el estado completo en vez de `null`; el campo `error`
+   del envelope queda en `null` porque no hubo una excepción real que
+   capturar — el detalle del fallo vive en `resultado.fallos_tecnicos`.
+3. **`destino_principal` válido** — si el estado del grafo trae
    `destino_principal` con uno de los 3 valores del contrato, se usa
    directo como estado (`estandar`, `urgente` o `revision_humana`).
-3. **`destino_principal` fuera del contrato** — si viene con cualquier
+4. **`destino_principal` fuera del contrato** — si viene con cualquier
    valor que no sea **exactamente** `"estandar"`, `"urgente"` o
    `"revision_humana"` (por ejemplo `"Urgente"`, `"estándar"`,
    `" urgente"`, `"revision humana"`), se deriva a **`revision_humana`**
@@ -56,7 +68,7 @@ que aplica estas reglas en orden:
    un documento que podría ser urgente no debe terminar en `estandar`. El
    valor original se sigue guardando tal cual dentro de `resultado`, para
    poder auditarlo.
-4. **Fallback (MF-11 todavía no integrado)** — si `destino_principal` no
+5. **Fallback (MF-11 todavía no integrado)** — si `destino_principal` no
    viene, se usa la única señal disponible hoy: `validacion_ok = false` →
    `revision_humana`; el resto → `estandar`.
 
@@ -67,7 +79,9 @@ negocio: solo guarda lo que se le pasa en la carpeta del estado.
 > `TypedDict` y LangGraph solo devuelve las claves declaradas ahí. Para que
 > `destino_principal`/`urgente`/`requiere_auditoria_humana` lleguen a
 > `routes.py`, MF-11 tiene que agregarlos a `MediFlowState`. Hasta entonces
-> aplica siempre el fallback del punto 4.
+> aplica siempre el fallback del punto 5. Lo mismo aplica a `fallos_tecnicos`
+> (punto 2): hasta que MF-19 lo agregue a `MediFlowState`, `routes.py` nunca
+> lo encuentra en el estado y esa regla no se dispara.
 
 ## Qué se guarda
 
@@ -203,7 +217,11 @@ uno con una respuesta distinta:
   envelope), `urgente = true` con destino `revision_humana` (se conserva
   sin pisarse), un `destino_principal` fuera del contrato (va a
   `revision_humana` y deja warning), una tabla de casos de
-  `determinar_estado`, el caso de
+  `determinar_estado` (incluyendo `fallos_tecnicos` de MF-19 con y sin
+  excepción, con y sin `destino_principal`), el caso de `fallos_tecnicos`
+  sin excepción real a nivel de `POST /documentos` (respuesta 500 igual a
+  la de una excepción real, pero con `resultado` completo y `error: null`
+  en el envelope), el caso de
   tipo de archivo no soportado (no persiste nada), el caso de fallo de
   persistencia del resultado (no tumba la respuesta), el caso de fallo al
   guardar el original (503 estructurado, no corre el grafo) y los 3

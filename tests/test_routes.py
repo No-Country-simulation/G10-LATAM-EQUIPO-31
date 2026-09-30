@@ -219,6 +219,39 @@ def test_determinar_estado(validacion_ok, hubo_excepcion, destino_principal, esp
     ) == esperado
 
 
+@pytest.mark.parametrize(
+    "hubo_excepcion,destino_principal,fallos_tecnicos",
+    [
+        # fallos_tecnicos (MF-19) manda a error_tecnico aunque no haya
+        # habido excepción real y aunque venga un destino_principal válido.
+        (False, "urgente", ["timeout llamando al proveedor Gemini"]),
+        (False, "estandar", [{"nodo": "extraccion", "error": "timeout"}]),
+        (False, None, ["timeout llamando al proveedor Gemini"]),
+        # Si además hubo excepción, sigue siendo error_tecnico (misma regla).
+        (True, "estandar", ["timeout llamando al proveedor Gemini"]),
+    ],
+)
+def test_determinar_estado_fallos_tecnicos_de_mf19_manda_a_error_tecnico(
+    hubo_excepcion, destino_principal, fallos_tecnicos
+):
+    assert routes.determinar_estado(
+        validacion_ok=True,
+        hubo_excepcion=hubo_excepcion,
+        destino_principal=destino_principal,
+        fallos_tecnicos=fallos_tecnicos,
+    ) == "error_tecnico"
+
+
+@pytest.mark.parametrize("fallos_tecnicos", [None, []])
+def test_determinar_estado_fallos_tecnicos_vacio_no_afecta(fallos_tecnicos):
+    assert routes.determinar_estado(
+        validacion_ok=True,
+        hubo_excepcion=False,
+        destino_principal="estandar",
+        fallos_tecnicos=fallos_tecnicos,
+    ) == "estandar"
+
+
 class GrafoFalso:
     """Reemplaza a grafo_mediflow para simular el estado que va a devolver el
     grafo una vez integrado MF-11 (destino_principal, urgente,
@@ -346,6 +379,50 @@ def test_post_documentos_destino_principal_desconocido_va_a_revision_humana(
     assert resultado["resultado"]["destino_principal"] == "Urgente"
     assert resultado["urgente"] is True
     assert any("destino_principal desconocido" in r.getMessage() for r in caplog.records)
+
+
+def test_post_documentos_fallos_tecnicos_de_mf19_sin_excepcion_va_a_error_tecnico(
+    monkeypatch,
+):
+    """MF-19 puede agregar `fallos_tecnicos` al estado sin que el grafo
+    lance una excepción real (el nodo captura el fallo y el flujo sigue).
+    Igual debe tratarse como error_tecnico, con la misma respuesta HTTP
+    (500, status "error") que ya usábamos para el caso de excepción real."""
+
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "destino_principal": "estandar",
+            "fallos_tecnicos": [
+                {"nodo": "extraccion", "error": "timeout llamando al proveedor Gemini"},
+            ],
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-MF19")
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["status"] == "error"
+    assert body["estado"] == "error_tecnico"
+    assert body["mensaje"] == "Fallo técnico al procesar el documento"
+    assert body["persistencia_ok"] is True
+    assert body["oci_object_name_resultado"] == "errores_tecnicos/DOC-TEST-MF19.json"
+
+    _, estado, resultado = fake_storage.resultados_subidos[0]
+    assert estado == "error_tecnico"
+    # No hubo excepción real: el detalle del fallo vive en `fallos_tecnicos`
+    # dentro del estado persistido, no en el campo `error` del envelope.
+    assert resultado["error"] is None
+    assert resultado["resultado"]["fallos_tecnicos"] == [
+        {"nodo": "extraccion", "error": "timeout llamando al proveedor Gemini"},
+    ]
+    # destino_principal queda registrado tal cual, aunque fallos_tecnicos
+    # tenga prioridad y no se haya usado para el enrutamiento.
+    assert resultado["resultado"]["destino_principal"] == "estandar"
 
 
 def test_post_documentos_tipo_no_soportado_no_persiste_nada(monkeypatch):
