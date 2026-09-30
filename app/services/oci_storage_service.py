@@ -8,14 +8,23 @@ load_dotenv()
 
 RECIBIDOS_PREFIX = "recibidos/"
 
+ESTADO_ERROR_TECNICO = "error_tecnico"
+
 # Único lugar que mapea el estado de un resultado a su carpeta en el bucket.
-# Sumar un estado nuevo (p. ej. "urgente") es agregar una entrada acá; nada
-# más del servicio depende de los nombres de carpeta.
+# Las claves de procesados/ coinciden con los valores de `destino_principal`
+# que define el contrato de MF-11 ("estandar", "urgente", "revision_humana").
+# Sumar un destino nuevo es agregar una entrada acá; nada más del servicio
+# depende de los nombres de carpeta.
 ESTADOS_A_PREFIJO = {
-    "procesado_exitoso": "procesados/",
-    "auditoria_humana": "auditoria_humana/",
-    "error_tecnico": "errores_tecnicos/",
+    "estandar": "procesados/estandar/",
+    "urgente": "procesados/urgente/",
+    "revision_humana": "procesados/revision_humana/",
+    ESTADO_ERROR_TECNICO: "errores_tecnicos/",
 }
+
+# Valores de `destino_principal` (MF-11) que se aceptan tal cual como estado:
+# todos los estados salvo el de error técnico, que solo lo decide la API.
+DESTINOS_PRINCIPALES = frozenset(ESTADOS_A_PREFIJO) - {ESTADO_ERROR_TECNICO}
 
 
 class PersistenciaOCIError(Exception):

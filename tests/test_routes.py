@@ -100,7 +100,7 @@ def _enviar_documento(client, documento_id="DOC-TEST-001", filename="01_receta_m
     )
 
 
-def test_post_documentos_exitoso_persiste_en_procesados(monkeypatch):
+def test_post_documentos_exitoso_persiste_en_estandar(monkeypatch):
     _configurar_agentes_mock(monkeypatch)
     fake_storage = FakeOCIStorageService()
     client = _crear_client(monkeypatch, fake_storage)
@@ -109,16 +109,16 @@ def test_post_documentos_exitoso_persiste_en_procesados(monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["estado"] == "procesado_exitoso"
+    assert body["estado"] == "estandar"
     assert body["persistencia_ok"] is True
-    assert body["oci_object_name_resultado"] == "procesado_exitoso/DOC-TEST-001.json"
+    assert body["oci_object_name_resultado"] == "estandar/DOC-TEST-001.json"
     # La respuesta HTTP mantiene su forma previa (compatibilidad hacia atrás).
     assert body["validacion"]["validacion_ok"] is True
 
     assert len(fake_storage.resultados_subidos) == 1
     documento_id, estado, resultado = fake_storage.resultados_subidos[0]
     assert documento_id == "DOC-TEST-001"
-    assert estado == "procesado_exitoso"
+    assert estado == "estandar"
 
     # El envelope persistido guarda el estado COMPLETO del grafo (plano,
     # tal como lo devuelve grafo_mediflow.invoke), no un subconjunto de
@@ -128,6 +128,8 @@ def test_post_documentos_exitoso_persiste_en_procesados(monkeypatch):
     assert estado_persistido["validacion_ok"] is True
     assert estado_persistido["errores_validacion"] == []
     assert resultado["oci_object_name_original"] == fake_storage.documentos_subidos[0]
+    # Sin MF-11 integrado el estado no trae `urgente`: no se inventa la clave.
+    assert "urgente" not in resultado
 
     # El documento original se serializa como metadata liviana: sin bytes
     # ni texto completo (eso ya vive en recibidos/).
@@ -138,7 +140,7 @@ def test_post_documentos_exitoso_persiste_en_procesados(monkeypatch):
     assert "documento_texto" not in documento_persistido
 
 
-def test_post_documentos_validacion_falla_persiste_en_auditoria_humana(monkeypatch):
+def test_post_documentos_validacion_falla_persiste_en_revision_humana(monkeypatch):
     # clasificar_documento devuelve None -> nodo_validacion_pydantic detecta
     # que falta la clasificación y marca validacion_ok=False.
     _configurar_agentes_mock(monkeypatch, clasificar=lambda _documento: None)
@@ -149,11 +151,11 @@ def test_post_documentos_validacion_falla_persiste_en_auditoria_humana(monkeypat
 
     assert response.status_code == 200
     body = response.json()
-    assert body["estado"] == "auditoria_humana"
+    assert body["estado"] == "revision_humana"
     assert body["persistencia_ok"] is True
 
     _, estado, resultado = fake_storage.resultados_subidos[0]
-    assert estado == "auditoria_humana"
+    assert estado == "revision_humana"
     assert resultado["resultado"]["validacion_ok"] is False
     assert resultado["resultado"]["clasificacion"] is None
 
@@ -177,6 +179,110 @@ def test_post_documentos_excepcion_en_el_grafo_persiste_en_errores_tecnicos(monk
     assert estado == "error_tecnico"
     assert "RuntimeError" in resultado["error"]
     assert resultado["resultado"] is None
+
+
+@pytest.mark.parametrize(
+    "validacion_ok,hubo_excepcion,destino_principal,esperado",
+    [
+        # La excepción técnica manda siempre, aun con destino_principal.
+        (True, True, "urgente", "error_tecnico"),
+        (False, True, None, "error_tecnico"),
+        # destino_principal válido (contrato MF-11) se usa tal cual.
+        (True, False, "estandar", "estandar"),
+        (True, False, "urgente", "urgente"),
+        (True, False, "revision_humana", "revision_humana"),
+        (False, False, "urgente", "urgente"),
+        # Sin destino_principal (MF-11 no integrado): fallback por validacion_ok.
+        (True, False, None, "estandar"),
+        (False, False, None, "revision_humana"),
+        # Valor desconocido o "error_tecnico" no se aceptan: también fallback.
+        (True, False, "cualquier_cosa", "estandar"),
+        (False, False, "cualquier_cosa", "revision_humana"),
+        (True, False, "error_tecnico", "estandar"),
+    ],
+)
+def test_determinar_estado(validacion_ok, hubo_excepcion, destino_principal, esperado):
+    assert routes.determinar_estado(
+        validacion_ok=validacion_ok,
+        hubo_excepcion=hubo_excepcion,
+        destino_principal=destino_principal,
+    ) == esperado
+
+
+class GrafoFalso:
+    """Reemplaza a grafo_mediflow para simular el estado que va a devolver el
+    grafo una vez integrado MF-11 (destino_principal, urgente,
+    requiere_auditoria_humana), que hoy MediFlowState todavía no define."""
+
+    def __init__(self, campos_extra):
+        self._campos_extra = campos_extra
+
+    def invoke(self, estado_inicial):
+        return {
+            **estado_inicial,
+            "clasificacion": CLASIFICACION_PRUEBA,
+            "extraccion": EXTRACCION_PRUEBA,
+            "validacion_ok": True,
+            "errores_validacion": [],
+            **self._campos_extra,
+        }
+
+
+@pytest.mark.parametrize(
+    "destino_principal,urgente,requiere_auditoria_humana",
+    [
+        ("estandar", False, False),
+        ("urgente", True, False),
+        ("revision_humana", False, True),
+    ],
+)
+def test_post_documentos_con_destino_principal_de_mf11(
+    monkeypatch, destino_principal, urgente, requiere_auditoria_humana
+):
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "destino_principal": destino_principal,
+            "urgente": urgente,
+            "requiere_auditoria_humana": requiere_auditoria_humana,
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-MF11")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estado"] == destino_principal
+    assert body["persistencia_ok"] is True
+
+    _, estado, resultado = fake_storage.resultados_subidos[0]
+    assert estado == destino_principal
+    assert resultado["estado"] == destino_principal
+    # `urgente` se copia a nivel superior del envelope...
+    assert resultado["urgente"] is urgente
+    # ...y los campos de MF-11 se persisten en el estado completo.
+    assert resultado["resultado"]["destino_principal"] == destino_principal
+    assert resultado["resultado"]["urgente"] is urgente
+    assert resultado["resultado"]["requiere_auditoria_humana"] is requiere_auditoria_humana
+
+
+def test_post_documentos_destino_principal_desconocido_usa_fallback(monkeypatch):
+    monkeypatch.setattr(
+        routes, "grafo_mediflow", GrafoFalso({"destino_principal": "no_existe"})
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-MF11-X")
+
+    assert response.status_code == 200
+    assert response.json()["estado"] == "estandar"
+    _, estado, resultado = fake_storage.resultados_subidos[0]
+    assert estado == "estandar"
+    assert "urgente" not in resultado
 
 
 def test_post_documentos_tipo_no_soportado_no_persiste_nada(monkeypatch):
@@ -204,7 +310,7 @@ def test_post_documentos_fallo_de_persistencia_no_tumba_la_respuesta(monkeypatch
 
     assert response.status_code == 200
     body = response.json()
-    assert body["estado"] == "procesado_exitoso"
+    assert body["estado"] == "estandar"
     assert body["persistencia_ok"] is False
     assert body["oci_object_name_resultado"] is None
 
@@ -237,7 +343,7 @@ def test_post_documentos_formatos_binarios_de_samples_entradas(
 
     assert response.status_code == 200
     body = response.json()
-    assert body["estado"] == "procesado_exitoso"
+    assert body["estado"] == "estandar"
     assert body["persistencia_ok"] is True
 
     _, _, resultado = fake_storage.resultados_subidos[0]

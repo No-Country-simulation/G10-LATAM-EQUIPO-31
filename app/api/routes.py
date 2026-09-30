@@ -5,7 +5,12 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.services.oci_storage_service import OCIStorageService, PersistenciaOCIError
+from app.services.oci_storage_service import (
+    DESTINOS_PRINCIPALES,
+    ESTADO_ERROR_TECNICO,
+    OCIStorageService,
+    PersistenciaOCIError,
+)
 from app.graph.graph import grafo_mediflow
 from app.schemas.documento import DocumentoEntrada
 
@@ -48,24 +53,35 @@ def _serializar_estado_grafo(resultado: dict) -> dict:
     }
 
 
-def determinar_estado(validacion_ok: bool, hubo_excepcion: bool) -> str:
+def determinar_estado(
+    validacion_ok: bool,
+    hubo_excepcion: bool,
+    destino_principal: str | None = None,
+) -> str:
     """
-    Determina bajo cuál de los 3 estados (ver ESTADOS_A_PREFIJO en
+    Determina bajo cuál estado (ver ESTADOS_A_PREFIJO en
     oci_storage_service.py) se persiste el resultado del flujo.
 
-    Hoy es la única señal disponible: si el grafo lanzó una excepción
-    técnica real (proveedor/modelo, un nodo que falla) el resultado es
-    error_tecnico; si corrió pero la validación estructural no pasó, es
-    auditoria_humana; si todo salió bien, procesado_exitoso. Cuando
-    MF-09/MF-10/MF-11 aporten la lógica real de consistencia, confianza y
-    enrutamiento a revisión humana, esta es la única función que hay que
-    actualizar.
+    1. Si el grafo lanzó una excepción técnica real (proveedor/modelo, un
+       nodo que falla) -> error_tecnico.
+    2. Si el estado trae un `destino_principal` válido (contrato de MF-11:
+       "estandar", "urgente" o "revision_humana") -> se usa tal cual.
+    3. Si no (MF-11 todavía no está integrado, o mandó un valor
+       desconocido) -> fallback con la única señal disponible:
+       validacion_ok False va a revision_humana, el resto a estandar.
     """
     if hubo_excepcion:
-        return "error_tecnico"
+        return ESTADO_ERROR_TECNICO
+    if destino_principal in DESTINOS_PRINCIPALES:
+        return destino_principal
+    if destino_principal is not None:
+        logger.warning(
+            "destino_principal desconocido %r; se usa el fallback por validacion_ok",
+            destino_principal,
+        )
     if not validacion_ok:
-        return "auditoria_humana"
-    return "procesado_exitoso"
+        return "revision_humana"
+    return "estandar"
 
 
 @router.post("/documentos")
@@ -156,8 +172,11 @@ async def recibir_documento(
 
     hubo_excepcion = error_tecnico is not None
     validacion_ok = bool(resultado) and resultado.get("validacion_ok", False)
+    destino_principal = resultado.get("destino_principal") if resultado else None
     estado = determinar_estado(
-        validacion_ok=validacion_ok, hubo_excepcion=hubo_excepcion
+        validacion_ok=validacion_ok,
+        hubo_excepcion=hubo_excepcion,
+        destino_principal=destino_principal,
     )
 
     # 6. Serializar el estado COMPLETO que devolvió el grafo (para
@@ -199,6 +218,10 @@ async def recibir_documento(
         "resultado": estado_completo,
         "error": error_tecnico,
     }
+    # `urgente` (contrato de MF-11) se copia a nivel superior solo cuando el
+    # estado lo trae, igual que nivel_urgencia, para filtrar sin desanidar.
+    if estado_completo is not None and "urgente" in estado_completo:
+        envelope["urgente"] = estado_completo["urgente"]
 
     try:
         oci_object_name_resultado = storage.upload_resultado(

@@ -24,7 +24,7 @@ La arquitectura está orquestada con LangGraph y combina dos agentes especializa
 - **Evaluación de confianza:** calcula un score de confianza y detecta ambigüedad, inconsistencias o campos faltantes.
 - **Enrutamiento condicional:** deriva el documento a flujo estándar, cola de emergencia médica, o revisión humana (HITL), según urgencia y nivel de confianza.
 - **Fallback técnico:** ante fallos de la API del LLM (timeout, error 5xx, indisponibilidad), el sistema reintenta con un LLM alternativo antes de fallar.
-- **Persistencia:** los documentos originales se almacenan en `recibidos/`, y el resultado del flujo se persiste aparte según su estado (`procesados/`, `auditoria_humana/`, `errores_tecnicos/`), vinculado al original por `documento_id`. Detalle en [docs/persistencia-resultados.md](docs/persistencia-resultados.md).
+- **Persistencia:** los documentos originales se almacenan en `recibidos/`, y el resultado del flujo se persiste aparte según su destino (`procesados/estandar/`, `procesados/urgente/`, `procesados/revision_humana/`, `errores_tecnicos/`), vinculado al original por `documento_id`. Detalle en [docs/persistencia-resultados.md](docs/persistencia-resultados.md).
 
 ### Diagrama de arquitectura
 

@@ -9,8 +9,9 @@ original por `documento_id`.
 | Carpeta | Contenido |
 |---|---|
 | `recibidos/` | Documento original, tal como llegó (MF-04). **Nunca se sobrescribe ni se modifica** al persistir un resultado — la persistencia de resultados vive en carpetas separadas. |
-| `procesados/` | Resultado de un documento que terminó el flujo correctamente (`validacion_ok = true`). |
-| `auditoria_humana/` | Resultado de un documento que terminó el flujo pero necesita revisión humana. |
+| `procesados/estandar/` | Resultado de un documento enrutado al flujo estándar (`destino_principal = "estandar"`). |
+| `procesados/urgente/` | Resultado de un documento enrutado a la cola urgente (`destino_principal = "urgente"`). |
+| `procesados/revision_humana/` | Resultado de un documento que necesita revisión humana (`destino_principal = "revision_humana"`). |
 | `errores_tecnicos/` | Resultado (parcial) de un documento cuyo procesamiento falló por una excepción técnica real (proveedor/modelo, un nodo del grafo que crashea). |
 
 El nombre de objeto para un resultado es siempre
@@ -21,33 +22,45 @@ otros caracteres problemáticos en la ruta de OCI). El documento original en
 (antes solo se sanitizaba el nombre de archivo).
 
 El mapeo estado → carpeta vive en un único lugar:
-`ESTADOS_A_PREFIJO` en `app/services/oci_storage_service.py`. Sumar un
-estado nuevo (por ejemplo, una futura ruta `urgente/`) es agregar una
-entrada a ese diccionario; no requiere tocar la lógica de subida/recuperación.
+`ESTADOS_A_PREFIJO` en `app/services/oci_storage_service.py`. De ahí se
+derivan también `DESTINOS_PRINCIPALES` (los valores de `destino_principal`
+que se aceptan tal cual) y `ESTADO_ERROR_TECNICO`. Sumar un destino nuevo
+es agregar una entrada a ese diccionario; no requiere tocar la lógica de
+subida/recuperación ni `determinar_estado`.
 
-## Los 3 estados y cómo se determinan hoy
+## Los 4 estados y cómo se determinan
 
-`app/api/routes.py` define `determinar_estado(validacion_ok, hubo_excepcion)`:
+Los estados de `procesados/` coinciden con el contrato confirmado de MF-11:
+el estado del grafo trae `destino_principal` (`"estandar"`, `"urgente"` o
+`"revision_humana"`) más los booleanos `urgente` y
+`requiere_auditoria_humana`.
 
-- **`error_tecnico`** — el grafo lanzó una excepción real durante su
-  ejecución (fallo del proveedor/modelo, un nodo que crashea de forma
-  inesperada). La respuesta HTTP también refleja el fallo (código 500).
-  Un tipo de archivo no soportado (`415`) **no** cuenta como error técnico:
-  se valida antes de tocar OCI o el grafo, y no genera ningún objeto en
-  `errores_tecnicos/`.
-- **`auditoria_humana`** — el grafo corrió sin excepciones pero
-  `validacion_ok` dio `false`.
-- **`procesado_exitoso`** — el grafo corrió sin excepciones y
-  `validacion_ok` dio `true`.
+`app/api/routes.py` define
+`determinar_estado(validacion_ok, hubo_excepcion, destino_principal=None)`,
+que aplica estas reglas en orden:
 
-Esta es la única señal disponible **hoy** (Sprint 2, antes de que MF-09
-—consistencia—, MF-10/MF-11 —confianza y enrutamiento HITL— y MF-19
-—fallback técnico— estén integrados). Cuando esos tickets aporten una
-señal real de enrutamiento (por ejemplo, un campo `requiere_revision_humana`
-en el estado del grafo), **solo hay que actualizar `determinar_estado` en
-`routes.py`** — el servicio de persistencia (`oci_storage_service.py`) no
-necesita cambios porque no conoce reglas de negocio, solo guarda lo que se
-le pasa.
+1. **`error_tecnico`** — el grafo lanzó una excepción real durante su
+   ejecución (fallo del proveedor/modelo, un nodo que crashea de forma
+   inesperada). La respuesta HTTP también refleja el fallo (código 500).
+   Un tipo de archivo no soportado (`415`) **no** cuenta como error técnico:
+   se valida antes de tocar OCI o el grafo, y no genera ningún objeto en
+   `errores_tecnicos/`.
+2. **`destino_principal` válido** — si el estado del grafo trae
+   `destino_principal` con uno de los 3 valores del contrato, se usa
+   directo como estado (`estandar`, `urgente` o `revision_humana`).
+3. **Fallback (MF-11 todavía no integrado)** — si `destino_principal` no
+   viene (o trae un valor desconocido, que se loguea como warning), se usa
+   la única señal disponible hoy: `validacion_ok = false` →
+   `revision_humana`; el resto → `estandar`.
+
+El servicio de persistencia (`oci_storage_service.py`) no conoce reglas de
+negocio: solo guarda lo que se le pasa en la carpeta del estado.
+
+> **Nota de integración:** `MediFlowState` (`app/schemas/state.py`) es un
+> `TypedDict` y LangGraph solo devuelve las claves declaradas ahí. Para que
+> `destino_principal`/`urgente`/`requiere_auditoria_humana` lleguen a
+> `routes.py`, MF-11 tiene que agregarlos a `MediFlowState`. Hasta entonces
+> aplica siempre el fallback del punto 3.
 
 ## Qué se guarda
 
@@ -59,20 +72,29 @@ metadata de trazabilidad:
 ```json
 {
   "documento_id": "...",
-  "estado": "procesado_exitoso | auditoria_humana | error_tecnico",
+  "estado": "estandar | urgente | revision_humana | error_tecnico",
   "timestamp": "ISO 8601 UTC",
   "oci_object_name_original": "recibidos/...",
   "nivel_urgencia": "no_urgente | prioritario | urgente | emergencia | null",
+  "urgente": true,
   "resultado": {
     "documento": { "documento_id": "...", "tipo_archivo": "...", "canal_origen": "...", "nombre_archivo": "...", "mime_type": "..." },
     "clasificacion": { ... } ,
     "extraccion": { ... },
     "validacion_ok": true,
-    "errores_validacion": []
+    "errores_validacion": [],
+    "destino_principal": "urgente",
+    "urgente": true,
+    "requiere_auditoria_humana": false
   },
   "error": "mensaje de la excepción, solo si estado == error_tecnico"
 }
 ```
+
+`urgente` (a nivel superior) y los campos `destino_principal`/`urgente`/
+`requiere_auditoria_humana` dentro de `resultado` **solo aparecen cuando el
+estado del grafo los trae** (es decir, con MF-11 integrado). No se inventan
+valores por defecto.
 
 `resultado` refleja las claves de `MediFlowState` (`app/schemas/state.py`)
 tal como el grafo las deja: por eso `validacion_ok`/`errores_validacion`
@@ -95,10 +117,11 @@ OCI sin aportar nada nuevo. El resto de los campos del documento
 trazabilidad.
 
 `nivel_urgencia` se copia de `extraccion.nivel_urgencia` (ya existe en
-`ExtraccionClinica`, `app/schemas/extraccion.py`) a nivel superior del
-envelope únicamente para que una futura ruta urgente pueda filtrar sin tener
-que desanidar `resultado.extraccion`. No es un campo inventado por MF-13: la
-señal ya la produce el Agente Extractor (MF-06).
+`ExtraccionClinica`, `app/schemas/extraccion.py`) y `urgente` se copia del
+booleano de MF-11, ambos a nivel superior del envelope únicamente para poder
+filtrar sin desanidar `resultado`. Ninguno es un campo inventado por MF-13:
+las señales las producen el Agente Extractor (MF-06) y el enrutamiento
+(MF-11).
 
 ## Reprocesar el mismo `documento_id`
 
@@ -162,12 +185,16 @@ uno con una respuesta distinta:
 ## Pruebas
 
 - `tests/test_oci_storage_service.py` — round-trip de `upload_resultado` /
-  `get_resultado` para los 3 estados, sanitización de `documento_id` (en
+  `get_resultado` para los 4 estados, sanitización de `documento_id` (en
   `upload_resultado` y también en `upload_document`), validación de estado
   inválido, que escribir un resultado no toca `recibidos/`, y los dos
   caminos de fallo (`put_object` que falla, verificación que no coincide).
 - `tests/test_routes.py` — `POST /documentos` de punta a punta (agentes
-  mockeados, `OCIStorageService` reemplazado) para los 3 estados, el caso de
+  mockeados, `OCIStorageService` reemplazado) para el fallback sin
+  `destino_principal` (`estandar`, `revision_humana`, `error_tecnico`), los
+  3 valores de `destino_principal` presentes (con `urgente` copiado al
+  envelope), un `destino_principal` desconocido, una tabla de casos de
+  `determinar_estado`, el caso de
   tipo de archivo no soportado (no persiste nada), el caso de fallo de
   persistencia del resultado (no tumba la respuesta), el caso de fallo al
   guardar el original (503 estructurado, no corre el grafo) y los 3
@@ -175,4 +202,4 @@ uno con una respuesta distinta:
   el documento persistido no incluye el contenido binario.
 - `samples/test_oci_resultado.py` — prueba manual contra el bucket real
   (usa el `.env` del usuario) que sube y recupera un resultado de ejemplo
-  para cada uno de los 3 estados.
+  para cada uno de los 4 estados.

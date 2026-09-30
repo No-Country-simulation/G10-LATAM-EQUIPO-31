@@ -1,9 +1,10 @@
 """Prueba manual de persistencia de RESULTADOS en OCI Object Storage (MF-13).
 
 A diferencia de samples/test_oci_connection.py (que prueba recibidos/), este
-script sube y recupera un resultado de ejemplo para cada uno de los 3
-estados soportados (procesados/, auditoria_humana/, errores_tecnicos/),
-contra el bucket real, usando las credenciales del .env del usuario.
+script sube y recupera un resultado de ejemplo para cada uno de los estados
+soportados (procesados/estandar/, procesados/urgente/,
+procesados/revision_humana/ y errores_tecnicos/), contra el bucket real,
+usando las credenciales del .env del usuario.
 
 Ejecutar desde la raiz del repo:
 
@@ -16,7 +17,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.services.oci_storage_service import ESTADOS_A_PREFIJO, OCIStorageService
+from app.services.oci_storage_service import (
+    ESTADO_ERROR_TECNICO,
+    ESTADOS_A_PREFIJO,
+    OCIStorageService,
+)
 
 
 def generate_document_id() -> str:
@@ -28,19 +33,32 @@ def generate_document_id() -> str:
 def probar_estado(service: OCIStorageService, estado: str) -> None:
     document_id = generate_document_id()
 
+    es_error = estado == ESTADO_ERROR_TECNICO
+    urgente = estado == "urgente"
+    nivel_urgencia = "urgente" if urgente else "no_urgente"
+
+    # Misma forma que el envelope que arma POST /documentos: estado completo
+    # plano en `resultado` (con los campos del contrato de MF-11) y `urgente`
+    # copiado a nivel superior. Un error técnico no tiene resultado.
     envelope = {
         "documento_id": document_id,
         "estado": estado,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "oci_object_name_original": f"recibidos/{document_id}_documento_prueba.txt",
-        "nivel_urgencia": "no_urgente",
-        "resultado": {
+        "nivel_urgencia": None if es_error else nivel_urgencia,
+        "resultado": None if es_error else {
             "clasificacion": {"tipo_documento": "Receta Medica"},
-            "extraccion": {"nivel_urgencia": "no_urgente"},
-            "validacion": {"validacion_ok": estado == "procesado_exitoso", "errores_validacion": []},
+            "extraccion": {"nivel_urgencia": nivel_urgencia},
+            "validacion_ok": estado != "revision_humana",
+            "errores_validacion": [],
+            "destino_principal": estado,
+            "urgente": urgente,
+            "requiere_auditoria_humana": estado == "revision_humana",
         },
-        "error": None,
+        "error": "RuntimeError: fallo técnico simulado" if es_error else None,
     }
+    if not es_error:
+        envelope["urgente"] = urgente
 
     print(f"\n--- estado: {estado} (prefijo {ESTADOS_A_PREFIJO[estado]}) ---")
     print(f"[1/2] Subiendo resultado de prueba con documento_id: {document_id}")

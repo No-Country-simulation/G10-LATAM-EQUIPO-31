@@ -129,8 +129,9 @@ def test_upload_document_sanitiza_document_id(service):
 @pytest.mark.parametrize(
     "estado,prefijo",
     [
-        ("procesado_exitoso", "procesados/"),
-        ("auditoria_humana", "auditoria_humana/"),
+        ("estandar", "procesados/estandar/"),
+        ("urgente", "procesados/urgente/"),
+        ("revision_humana", "procesados/revision_humana/"),
         ("error_tecnico", "errores_tecnicos/"),
     ],
 )
@@ -149,10 +150,10 @@ def test_upload_resultado_sanitiza_documento_id(service):
     """El documento_id no debe permitir traversal de rutas dentro del bucket."""
 
     object_name = service.upload_resultado(
-        "../../etc/passwd", "procesado_exitoso", {"x": 1}
+        "../../etc/passwd", "estandar", {"x": 1}
     )
 
-    assert object_name == "procesados/passwd.json"
+    assert object_name == "procesados/estandar/passwd.json"
 
 
 def test_upload_resultado_estado_invalido_lanza_value_error(service):
@@ -169,7 +170,7 @@ def test_upload_resultado_no_toca_recibidos(service):
     """Guardar un resultado no debe crear ni modificar nada bajo recibidos/."""
 
     service.upload_document("DOC-2026-RES003", b"original", "informe.pdf")
-    service.upload_resultado("DOC-2026-RES003", "procesado_exitoso", {"x": 1})
+    service.upload_resultado("DOC-2026-RES003", "estandar", {"x": 1})
 
     objetos_recibidos = [
         clave for clave in service._client._objetos if clave[2].startswith("recibidos/")
@@ -187,7 +188,7 @@ def test_upload_resultado_propaga_fallo_de_oci_como_persistencia_error(service, 
     monkeypatch.setattr(service._client, "put_object", put_object_falla)
 
     with pytest.raises(PersistenciaOCIError):
-        service.upload_resultado("DOC-2026-RES004", "procesado_exitoso", {"x": 1})
+        service.upload_resultado("DOC-2026-RES004", "estandar", {"x": 1})
 
 
 def test_upload_resultado_detecta_verificacion_fallida(service, monkeypatch):
@@ -203,4 +204,4 @@ def test_upload_resultado_detecta_verificacion_fallida(service, monkeypatch):
     monkeypatch.setattr(service._client, "get_object", get_object_corrupto)
 
     with pytest.raises(PersistenciaOCIError):
-        service.upload_resultado("DOC-2026-RES005", "procesado_exitoso", {"x": 1})
+        service.upload_resultado("DOC-2026-RES005", "estandar", {"x": 1})
