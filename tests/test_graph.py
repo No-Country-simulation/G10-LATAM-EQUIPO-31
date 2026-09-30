@@ -10,6 +10,8 @@ Los agentes se mockean para que estas pruebas no dependan de Gemini
 ni de credenciales externas.
 """
 
+from types import SimpleNamespace
+
 from app.graph import graph
 from app.schemas.clasificacion import Classification, DocumentType
 from app.schemas.documento import DocumentoEntrada
@@ -20,7 +22,6 @@ from app.schemas.extraccion import (
     Paciente,
     Profesional,
 )
-
 
 DOCUMENTO_PRUEBA = DocumentoEntrada(
     documento_id="DOC-CLIN-2026-8942",
@@ -70,7 +71,10 @@ def _configurar_agentes_mock(monkeypatch):
     monkeypatch.setattr(
         graph,
         "clasificar_documento",
-        lambda _documento: CLASIFICACION_PRUEBA,
+        # **kwargs porque nodo_clasificador (MF-19) siempre pasa
+        # modelo_fallback=... (puede ser None si no hay fallback
+        # configurado en el .env -- ver MODELO_CLASIFICADOR_FALLBACK).
+        lambda _documento, **kwargs: CLASIFICACION_PRUEBA,
     )
 
     monkeypatch.setattr(
@@ -137,6 +141,87 @@ def test_validacion_detecta_clasificacion_faltante():
     assert "No se generó un resultado de clasificación." in (
         resultado["errores_validacion"]
     )
+
+
+class TestCableadoDelFallbackMF19:
+    """
+    Gemini sigue siendo el modelo PRINCIPAL en ambos agentes. Groq entra
+    como fallback SOLO si `GROQ_API_KEY` esta configurada. Estas pruebas
+    validan que el GRAFO conecta (o no) el fallback segun esa variable --
+    no hacen ninguna llamada real a Groq.
+    """
+
+    def test_sin_groq_api_key_no_se_intenta_fallback(self, monkeypatch):
+        """Estado de hoy sin la key: todo sigue igual que antes de MF-19."""
+        monkeypatch.setattr(graph, "_GROQ_API_KEY", None)
+
+        capturado = {}
+        monkeypatch.setattr(
+            graph,
+            "clasificar_documento",
+            lambda _documento, **kwargs: capturado.setdefault("clasificador", kwargs) or CLASIFICACION_PRUEBA,
+        )
+        monkeypatch.setattr(
+            graph,
+            "extraer_datos_clinicos",
+            lambda **kwargs: capturado.setdefault("extractor", kwargs) or EXTRACCION_PRUEBA,
+        )
+        monkeypatch.setattr(graph, "ProveedorGemini", lambda modelo=None: object())
+
+        graph.grafo_mediflow.invoke({"documento": DOCUMENTO_PRUEBA})
+
+        assert capturado["clasificador"]["generador_fallback"] is None
+        assert capturado["extractor"]["proveedor_fallback"] is None
+
+    def test_con_groq_api_key_se_propaga_a_ambos_agentes(self, monkeypatch):
+        """Con GROQ_API_KEY configurada, el fallback SI se conecta en los dos agentes."""
+        monkeypatch.setattr(graph, "_GROQ_API_KEY", "clave-de-prueba")
+
+        capturado = {}
+        monkeypatch.setattr(
+            graph,
+            "clasificar_documento",
+            lambda _documento, **kwargs: capturado.setdefault("clasificador", kwargs) or CLASIFICACION_PRUEBA,
+        )
+        monkeypatch.setattr(
+            graph,
+            "extraer_datos_clinicos",
+            lambda **kwargs: capturado.setdefault("extractor", kwargs) or EXTRACCION_PRUEBA,
+        )
+        monkeypatch.setattr(graph, "ProveedorGemini", lambda modelo=None: object())
+        # ProveedorGroq real exige la API key al instanciarse; para esta
+        # prueba de cableado basta con no llamar a Groq de verdad.
+        monkeypatch.setattr(
+            graph.groq_client,
+            "ProveedorGroq",
+            lambda api_key=None, modelo=None: SimpleNamespace(api_key=api_key, modelo=modelo),
+        )
+
+        graph.grafo_mediflow.invoke({"documento": DOCUMENTO_PRUEBA})
+
+        assert capturado["clasificador"]["generador_fallback"] is graph._generador_fallback_clasificador
+        assert capturado["extractor"]["proveedor_fallback"].modelo == graph._MODELO_EXTRACTOR_FALLBACK
+
+    def test_el_generador_fallback_del_clasificador_llama_a_groq_con_los_parametros_correctos(
+        self, monkeypatch
+    ):
+        """Prueba el adaptador _generador_fallback_clasificador en si, no solo el cableado."""
+        capturado = {}
+
+        def _mock_groq(**kwargs):
+            capturado.update(kwargs)
+            return CLASIFICACION_PRUEBA
+
+        monkeypatch.setattr(graph.groq_client, "generar_estructurado_con_groq", _mock_groq)
+        monkeypatch.setattr(graph, "_GROQ_API_KEY", "clave-de-prueba")
+
+        resultado = graph._generador_fallback_clasificador(DOCUMENTO_PRUEBA, "prompt de prueba")
+
+        assert resultado is CLASIFICACION_PRUEBA
+        assert capturado["prompt"] == "prompt de prueba"
+        assert capturado["schema"] is Classification
+        assert capturado["api_key"] == "clave-de-prueba"
+        assert capturado["modelo"] == graph._MODELO_CLASIFICADOR_FALLBACK
 
 
 def test_validacion_detecta_extraccion_faltante():

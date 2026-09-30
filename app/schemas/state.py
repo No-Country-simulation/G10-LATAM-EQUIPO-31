@@ -45,6 +45,11 @@ class MediFlowState(TypedDict, total=False):
     # Resultado generado por el Agente Extractor.
     extraccion: ExtraccionClinica
 
+    # MF-19: fallos técnicos NO recuperados (Gemini y el fallback fallaron).
+    # Solo existe cuando hubo al menos uno; su presencia impide que la
+    # validación marque el procesamiento como exitoso.
+    fallos_tecnicos: list[str]
+
     # Resultado de la validación estructural del Sprint 1.
     validacion_ok: bool
     errores_validacion: list[str]

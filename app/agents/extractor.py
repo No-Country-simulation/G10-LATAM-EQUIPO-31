@@ -15,11 +15,12 @@ no cumple el schema, o el proveedor falla técnicamente (429/cuota, timeout,
 extracción "vacía" con campos_no_encontrados lleno, para que la etapa de
 "Evaluación de confianza y consistencia" decida enviarlo a revisión humana.
 
-Fallback técnico (según diagrama de arquitectura del equipo): si el
+Fallback técnico (MF-19, según diagrama de arquitectura del equipo): si el
 proveedor principal agota sus reintentos, se cambia a `proveedor_fallback`
-si se proporcionó uno. Cuál es el LLM alternativo queda pendiente de
-confirmar con el equipo (tarea abierta de Kimberlyn); mientras tanto,
-`proveedor_fallback` es opcional y el extractor sigue funcionando sin él.
+si se proporcionó uno. Cuál es el LLM alternativo sigue siendo una
+DECISIÓN PENDIENTE DEL GRUPO (ver MF-19); mientras no se confirme,
+`proveedor_fallback` es opcional y el extractor sigue funcionando sin él,
+solo con reintentos + degradación controlada.
 """
 
 from __future__ import annotations
@@ -29,12 +30,15 @@ import logging
 from typing import Any, Protocol
 
 from pydantic import ValidationError
-from app.schemas.documento import DocumentoEntrada
 
+from app.schemas.documento import DocumentoEntrada
 from app.schemas.extraccion import (
     ExtraccionClinica,
     Paciente,
     Profesional,
+)
+from app.services.errores_llm import (
+    ErrorTecnicoProveedor,  # re-exportada: ver ese módulo
 )
 
 logger = logging.getLogger("mediflow.app.agents.extractor")
@@ -56,21 +60,18 @@ class ProveedorLLM(Protocol):
     depende de qué proveedor termine usando el equipo.
     """
 
-def generar(
-    self,
-    prompt_sistema: str,
-    prompt_usuario: str,
-    contenido_bytes: bytes | None = None,
-    mime_type: str | None = None,
-) -> str: ...
-
-
-class ErrorTecnicoProveedor(Exception):
-    """
-    Excepción que un ProveedorLLM concreto puede lanzar para señalar un
-    fallo técnico (429/cuota, timeout, 5xx/indisponibilidad) en lugar de
-    un error de contenido.
-    """
+    # MF-19: estaba sin indentar (a nivel de módulo, fuera de la clase),
+    # por lo que ProveedorLLM quedaba con 0 métodos y no servía como
+    # chequeo de tipos real (aunque el código igual funcionaba, porque
+    # Python no valida un Protocol en runtime salvo con
+    # @runtime_checkable). No afecta ningún comportamiento existente.
+    def generar(
+        self,
+        prompt_sistema: str,
+        prompt_usuario: str,
+        contenido_bytes: bytes | None = None,
+        mime_type: str | None = None,
+    ) -> str: ...
 
 
 class ResultadoClasificacionMock:

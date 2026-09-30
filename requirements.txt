@@ -20,6 +20,8 @@ langgraph==1.2.11
 
 # Proveedores LLM
 google-genai==2.24.0
+groq==1.7.0           # MF-19: proveedor de fallback tecnico (qwen/qwen3.8-27b)
+pymupdf==1.28.2        # MF-19: rasteriza PDF a imagen para el fallback de Groq (no procesa PDF nativo)
 
 
 # OCI Object Storage
