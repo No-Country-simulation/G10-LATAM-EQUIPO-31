@@ -1,5 +1,6 @@
 """
 tests/test_integracion_sprint2.py
+Responsable:  Jennifer Silva 
 
 Prueba de integración end-to-end de los 3 nodos clave del Sprint 2:
 - MF-09: Validación de consistencia clínica (Tatiana / validation.py)
@@ -17,32 +18,31 @@ from app.schemas.respuesta import RespuestaProcesamiento, ResultadoValidacion
 # Importación del nodo de routing (MF-11)
 from app.graph.routing import nodo_routing_condicional
 
-# Importación o integración directa de la validación de Tatiana (MF-09)
+# Importación de la validación de consistencia clínica (MF-09)
 try:
     from app.services.validation import validar_consistencia_clinica
 except ImportError:
     try:
         from app.graph.consistencia import validar_consistencia_clinica
     except ImportError:
-        # Definición fallback basada en el código de Tatiana
         def validar_consistencia_clinica(respuesta: RespuestaProcesamiento) -> ResultadoValidacion:
             errores = []
             clasif = respuesta.clasificacion
-            extrac = respuesta.extraction
+            extrac = getattr(respuesta, "extraction", None) or getattr(respuesta, "extraccion", None)
 
-            if clasif.tipo_documento == DocumentType.RECETA_MEDICA:
+            if clasif and clasif.tipo_documento == DocumentType.RECETA_MEDICA:
                 if len(getattr(extrac, "estudios_solicitados", [])) > 0:
                     errores.append(
                         f"Inconsistencia: El documento está clasificado como 'Receta Médica', "
                         f"pero contiene {len(extrac.estudios_solicitados)} estudio(s) solicitado(s)."
                     )
 
-            prioridad_clasificador = clasif.nivel_prioridad.lower() if clasif.nivel_prioridad else ""
+            prioridad_clasificador = clasif.nivel_prioridad.lower() if clasif and clasif.nivel_prioridad else ""
             urgencia_extractor = (
                 extrac.nivel_urgencia.value.lower()
                 if hasattr(extrac.nivel_urgencia, "value")
                 else str(extrac.nivel_urgencia).lower()
-            ) if extrac.nivel_urgencia else ""
+            ) if extrac and extrac.nivel_urgencia else ""
 
             if "emergencia" in prioridad_clasificador or "urgente" in prioridad_clasificador:
                 if "no_urgente" in urgencia_extractor:
@@ -51,11 +51,11 @@ except ImportError:
                         "pero el Agente Extractor determinó que las señales de gravedad son 'No Urgente'."
                     )
 
-            if str(clasif.tipo_documento) != "No Clasificado":
-                if not extrac.paciente or not getattr(extrac.paciente, "nombre_completo", None):
+            if clasif and str(clasif.tipo_documento) != "No Clasificado":
+                if not extrac or not getattr(extrac, "paciente", None) or not getattr(extrac.paciente, "nombre_completo", None):
                     errores.append("Datos faltantes: No se logró extraer el nombre completo del paciente.")
 
-            if getattr(extrac, "profesional", None):
+            if extrac and getattr(extrac, "profesional", None):
                 prof = extrac.profesional
                 if getattr(prof, "registro_profesional", None) and not getattr(prof, "especialidad", None):
                     errores.append(
@@ -77,10 +77,13 @@ def nodo_validacion_consistencia(state: MediFlowState) -> dict:
     clasificacion = state.get("clasificacion")
     extraccion = state.get("extraccion") or state.get("extraction")
 
-    # Mapeo a la estructura esperada por Tatiana
-    respuesta = RespuestaProcesamiento(
+    # model_construct evita la validación estricta de campos obligatorios auxiliares (status, documento_id, etc.)
+    respuesta = RespuestaProcesamiento.model_construct(
         clasificacion=clasificacion,
-        extraction=extraccion
+        extraction=extraccion,
+        extraccion=extraccion,
+        status="PROCESADO",
+        documento_id="doc_test_integration"
     )
 
     resultado: ResultadoValidacion = validar_consistencia_clinica(respuesta)
@@ -150,7 +153,6 @@ def extraccion_factory(urgencia=NivelUrgencia.NO_URGENTE, estudios=None):
         paciente=Paciente(nombre_completo="María López", edad=45),
         nivel_urgencia=urgencia,
     )
-    # Asignación de campos adicionales si el schema los soporta
     if hasattr(extraccion, "estudios_solicitados"):
         extraccion.estudios_solicitados = estudios if estudios is not None else []
     if hasattr(extraccion, "profesional"):
@@ -239,12 +241,9 @@ def test_integracion_regla_precedencia_urgente_con_inconsistencia():
 
     estado_final = _ejecutar_pipeline_sprint2(estado_inicial)
 
-    # Verifica la contradicción detectada por la regla 2 de Tatiana
     assert len(estado_final["inconsistencias"]) > 0
     assert "Contradicción" in estado_final["inconsistencias"][0]
-
-    # Verifica la regla de precedencia
     assert estado_final["categoria_confianza"] in ("Baja", "Media")
     assert estado_final["destino_principal"] == "revision_humana"
     assert estado_final["requiere_auditoria_humana"] is True
-    assert estado_final["urgente"] is True  # Se preserva la señal por el Clasificador "Urgente"
+    assert estado_final["urgente"] is True
