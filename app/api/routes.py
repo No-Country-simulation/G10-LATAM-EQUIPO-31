@@ -233,6 +233,20 @@ async def recibir_documento(
     #    MF-09/MF-10/MF-11/MF-19 agreguen campos nuevos. Reprocesar el mismo
     #    documento_id sobrescribe el resultado anterior (sin versionado
     #    todavía; ver docs/persistencia-resultados.md).
+    #
+    #    `error` queda en None cuando el error_tecnico viene de
+    #    `fallos_tecnicos` (MF-19) sin excepción real: acá se copia ese
+    #    detalle también, para que alguien que filtre resultados por el
+    #    campo `error` (en vez de bucear en `resultado.fallos_tecnicos`)
+    #    igual vea por qué el documento terminó en errores_tecnicos/.
+    error_persistido = error_tecnico
+    if error_persistido is None and fallos_tecnicos:
+        # str(...) por elemento: `fallos_tecnicos` no tiene todavía un
+        # contrato cerrado (MF-19 hoy pone strings, pero nada impide que
+        # más adelante lleven una estructura más rica, p.ej. un dict por
+        # nodo), así que no se puede asumir que cada elemento ya sea str.
+        error_persistido = "; ".join(str(fallo) for fallo in fallos_tecnicos)
+
     envelope = {
         "documento_id": documento_id,
         "estado": estado,
@@ -240,7 +254,7 @@ async def recibir_documento(
         "oci_object_name_original": object_name,
         "nivel_urgencia": nivel_urgencia,
         "resultado": estado_completo,
-        "error": error_tecnico,
+        "error": error_persistido,
     }
     # `urgente` (contrato de MF-11) se copia a nivel superior solo cuando el
     # estado lo trae, igual que nivel_urgencia, para filtrar sin desanidar.

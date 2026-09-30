@@ -77,8 +77,13 @@ EXTRACCION_PRUEBA = ExtraccionClinica(
 
 
 def _configurar_agentes_mock(monkeypatch, clasificar=None, extraer=None):
+    # **_kwargs: MF-19 agrego el parametro generador_fallback a
+    # clasificar_documento(); los mocks deben aceptar kwargs extra para
+    # seguir siendo compatibles sin acoplarse a la firma exacta.
     monkeypatch.setattr(
-        graph, "clasificar_documento", clasificar or (lambda _documento: CLASIFICACION_PRUEBA)
+        graph,
+        "clasificar_documento",
+        clasificar or (lambda _documento, **_kwargs: CLASIFICACION_PRUEBA),
     )
     monkeypatch.setattr(
         graph, "extraer_datos_clinicos", extraer or (lambda **kwargs: EXTRACCION_PRUEBA)
@@ -145,7 +150,7 @@ def test_post_documentos_exitoso_persiste_en_estandar(monkeypatch):
 def test_post_documentos_validacion_falla_persiste_en_revision_humana(monkeypatch):
     # clasificar_documento devuelve None -> nodo_validacion_pydantic detecta
     # que falta la clasificación y marca validacion_ok=False.
-    _configurar_agentes_mock(monkeypatch, clasificar=lambda _documento: None)
+    _configurar_agentes_mock(monkeypatch, clasificar=lambda _documento, **_kwargs: None)
     fake_storage = FakeOCIStorageService()
     client = _crear_client(monkeypatch, fake_storage)
 
@@ -163,7 +168,7 @@ def test_post_documentos_validacion_falla_persiste_en_revision_humana(monkeypatc
 
 
 def test_post_documentos_excepcion_en_el_grafo_persiste_en_errores_tecnicos(monkeypatch):
-    def clasificar_que_falla(_documento):
+    def clasificar_que_falla(_documento, **_kwargs):
         raise RuntimeError("El proveedor Gemini no respondió (fallo técnico simulado)")
 
     _configurar_agentes_mock(monkeypatch, clasificar=clasificar_que_falla)
@@ -414,9 +419,15 @@ def test_post_documentos_fallos_tecnicos_de_mf19_sin_excepcion_va_a_error_tecnic
 
     _, estado, resultado = fake_storage.resultados_subidos[0]
     assert estado == "error_tecnico"
-    # No hubo excepción real: el detalle del fallo vive en `fallos_tecnicos`
-    # dentro del estado persistido, no en el campo `error` del envelope.
-    assert resultado["error"] is None
+    # No hubo excepción real, pero el campo `error` del envelope igual
+    # lleva el detalle de `fallos_tecnicos` (cada elemento convertido a
+    # texto), para que alguien que filtre por `error` no tenga que bucear
+    # dentro de `resultado`. El detalle original (sea cual sea su forma:
+    # string, dict por nodo, etc.) sigue disponible tal cual en
+    # `resultado.fallos_tecnicos`.
+    assert resultado["error"] == (
+        "{'nodo': 'extraccion', 'error': 'timeout llamando al proveedor Gemini'}"
+    )
     assert resultado["resultado"]["fallos_tecnicos"] == [
         {"nodo": "extraccion", "error": "timeout llamando al proveedor Gemini"},
     ]

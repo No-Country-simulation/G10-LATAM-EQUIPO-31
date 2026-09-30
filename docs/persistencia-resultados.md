@@ -54,9 +54,12 @@ fallos_tecnicos=None)`, que aplica estas reglas en orden:
    la misma que para el caso 1 (código 500, `status: "error"`,
    `mensaje: "Fallo técnico al procesar el documento"`). A diferencia del
    caso 1, acá sí hay `resultado` (el grafo terminó de correr), así que el
-   envelope persiste el estado completo en vez de `null`; el campo `error`
-   del envelope queda en `null` porque no hubo una excepción real que
-   capturar — el detalle del fallo vive en `resultado.fallos_tecnicos`.
+   envelope persiste el estado completo en vez de `null`. El campo `error`
+   del envelope no queda en `null`: aunque no hubo una excepción real que
+   capturar, se copia ahí el detalle de `resultado.fallos_tecnicos` (cada
+   elemento convertido a texto y unido con `"; "`), para que alguien que
+   filtre resultados por `error` vea el motivo sin tener que bucear dentro
+   de `resultado`.
 3. **`destino_principal` válido** — si el estado del grafo trae
    `destino_principal` con uno de los 3 valores del contrato, se usa
    directo como estado (`estandar`, `urgente` o `revision_humana`).
@@ -108,7 +111,7 @@ metadata de trazabilidad:
     "urgente": true,
     "requiere_auditoria_humana": false
   },
-  "error": "mensaje de la excepción, solo si estado == error_tecnico"
+  "error": "mensaje de la excepción, o el detalle de resultado.fallos_tecnicos (MF-19) si no hubo excepción; solo si estado == error_tecnico"
 }
 ```
 
