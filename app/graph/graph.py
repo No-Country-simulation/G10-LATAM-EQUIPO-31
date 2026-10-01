@@ -121,9 +121,20 @@ def nodo_validacion_pydantic(state: MediFlowState) -> dict:
         errores_validacion=errores,
     )
 
+    return resultado.model_dump()
+
+    def nodo_validacion_consistencia(state: MediFlowState) -> dict:
+        """
+        Nodo independiente para el módulo MF-09.
+        Ejecuta la validación clínica y añade las inconsistencias al estado general.
+        """
+    respuesta_procesamiento = state.get("respuesta") 
+    resultado = validar_consistencia_clinica(respuesta_procesamiento)
+
     return {
-        "inconsistencias": errores + resultado["inconsistencias"]
+        "inconsistencias": resultado["inconsistencias"]
     }
+
 
 
 
