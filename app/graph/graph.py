@@ -26,6 +26,7 @@ from app.schemas.state import MediFlowState, ResultadoValidacion
 from app.services import groq_client
 from app.services.gemini_client import DEFAULT_MODEL as _MODELO_GEMINI_CLASIFICADOR
 from app.services.gemini_provider import ProveedorGemini
+from app.schemas.respuesta import RespuestaProcesamiento, ResultadoValidacion
 
 # MF-19 | Fallback tecnico: Gemini sigue siendo el modelo PRINCIPAL en
 # los dos agentes, sin cambios. Groq (qwen/qwen3.8-27b) es el proveedor
@@ -302,13 +303,36 @@ def nodo_validacion_pydantic(state: MediFlowState) -> dict:
 
     return resultado.model_dump()
 
-    def nodo_validacion_consistencia(state: MediFlowState) -> dict:
-        """
-        Nodo independiente para el módulo MF-09.
-        Ejecuta la validación clínica y añade las inconsistencias al estado general.
-        """
-    respuesta_procesamiento = state.get("respuesta") 
-    resultado = validar_consistencia_clinica(respuesta_procesamiento)
+def nodo_validacion_consistencia(state: MediFlowState) -> dict:
+    """
+    Nodo independiente para el módulo MF-09.
+    Adapta MediFlowState al contrato esperado por la validación clínica.
+    """
+    documento = state.get("documento")
+    clasificacion = state.get("clasificacion")
+    extraccion = state.get("extraccion")
+
+    # Si no existen los resultados de los agentes, la validación
+    # Pydantic anterior ya habrá registrado el error.
+    if clasificacion is None or extraccion is None:
+        return {"inconsistencias": []}
+
+    respuesta = RespuestaProcesamiento(
+        status="procesado",
+        documento_id=(
+            documento.documento_id
+            if documento is not None
+            else "sin-documento-id"
+        ),
+        clasificacion=clasificacion,
+        extraccion=extraccion,
+        validacion=ResultadoValidacion(
+            validacion_ok=state.get("validacion_ok", True),
+            errores_validacion=state.get("errores_validacion", []),
+        ),
+    )
+
+    resultado = validar_consistencia_clinica(respuesta)
 
     return {
         "inconsistencias": resultado["inconsistencias"]

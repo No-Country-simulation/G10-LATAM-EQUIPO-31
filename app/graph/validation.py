@@ -1,13 +1,9 @@
-﻿from enum import Enum
-from typing import List, Dict, Any
+﻿from typing import List, Dict, Any
 from app.schemas.respuesta import RespuestaProcesamiento
 
-class RutaDestino(str, Enum):
-    STANDARD = "standard"     # Escenario 1: Procesado correctamente
-    EMERGENCY = "emergency"   # Escenario 2: Urgencia / Alerta
-    HITL = "hitl"             # Escenario 3: Ambiguo / Inconsistente
-
-def validar_consistencia_clinica(respuesta: RespuestaProcesamiento) -> Dict[str, Any]:
+def validar_consistencia_clinica(
+    respuesta: RespuestaProcesamiento
+) -> Dict[str, Any]:    
     """
     MF-09: Módulo de Validación de Consistencia e Inconsistencias Clínicas.
     """
@@ -22,7 +18,9 @@ def validar_consistencia_clinica(respuesta: RespuestaProcesamiento) -> Dict[str,
     
     # 1. DETECCIÓN DE DATOS FALTANTES
     if clasif.tipo_documento != "No Clasificado":
-        if not extrac.paciente or not extrac.paciente.nombre_completo:
+        paciente = getattr(extrac, "paciente", None)
+
+        if not paciente or not getattr(paciente, "nombre_completo", None):
             motivos_estructurados["faltantes"].append(
                 "Falta el nombre completo del paciente en un documento ya clasificado."
             )
@@ -57,16 +55,8 @@ def validar_consistencia_clinica(respuesta: RespuestaProcesamiento) -> Dict[str,
     
     es_valido = len(todos_los_errores) == 0
 
-    if not es_valido:
-        ruta_assigned = RutaDestino.HITL
-    elif urgencia_extrac in ["urgente", "emergencia"] or es_urgente_clasif:
-        ruta_assigned = RutaDestino.EMERGENCY
-    else:
-        ruta_assigned = RutaDestino.STANDARD
-
+    
     return {
-        "validacion_ok": es_valido,
-        "errores_validacion": todos_los_errores,
-        "ruta_destino": ruta_assigned,
-        "detalles_por_categoria": motivos_estructurados
-    }
+    "inconsistencias": todos_los_errores,
+    "detalles_por_categoria": motivos_estructurados
+}
