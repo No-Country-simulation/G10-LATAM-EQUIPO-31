@@ -9,7 +9,7 @@ definen en sus respectivos schemas Pydantic y se almacenan completos
 dentro del estado para evitar duplicar estructuras.
 """
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -44,6 +44,20 @@ class MediFlowState(TypedDict, total=False):
 
     # Resultado generado por el Agente Extractor.
     extraccion: ExtraccionClinica
+
+    # MF-19: fallos técnicos NO recuperados (Gemini y el fallback fallaron).
+    # Solo existe cuando hubo al menos uno; su presencia impide que la
+    # validación marque el procesamiento como exitoso.
+    fallos_tecnicos: list[str]
+
+    # MF-15 | Trazabilidad: que proveedor/modelo respondio en cada agente,
+    # si hubo fallback y cuantos intentos. Claves: proveedor_usado,
+    # modelo_usado, fallback_utilizado, intentos_principal,
+    # intentos_fallback. proveedor_usado y modelo_usado son None si
+    # fallaron todos los modelos. No cambia los contratos de
+    # Classification ni ExtraccionClinica.
+    metadata_clasificacion: dict[str, Any]
+    metadata_extraccion: dict[str, Any]
 
     # Resultado de la validación estructural del Sprint 1.
     validacion_ok: bool

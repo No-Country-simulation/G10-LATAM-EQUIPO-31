@@ -19,7 +19,7 @@ from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
-from app.agents.extractor import ErrorTecnicoProveedor
+from app.services.errores_llm import ErrorTecnicoProveedor
 
 # Carga el .env explícitamente (no asume que otro módulo ya lo haya hecho).
 # Variable de entorno usada en todo el proyecto: GEMINI_API_KEY
