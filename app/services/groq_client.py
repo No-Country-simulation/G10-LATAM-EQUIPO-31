@@ -198,6 +198,7 @@ class ProveedorGroq:
                     {"role": "user", "content": contenido_usuario},
                 ],
                 reasoning_effort=_REASONING_EFFORT,
+                max_tokens=900,
             )
         except ErrorTecnicoProveedor:
             raise
@@ -229,6 +230,7 @@ def generar_estructurado_con_groq(
             model=modelo,
             messages=[{"role": "user", "content": contenido_usuario}],
             reasoning_effort=_REASONING_EFFORT,
+            max_tokens=900,
             response_format={
                 "type": "json_schema",
                 "json_schema": {
