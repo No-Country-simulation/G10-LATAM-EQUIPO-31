@@ -21,6 +21,7 @@ from app.agents.classifier import clasificar_documento
 from app.agents.extractor import extraer_datos_clinicos
 from app.schemas.clasificacion import Classification, DocumentType
 from app.schemas.extraccion import ExtraccionClinica
+
 from app.schemas.state import MediFlowState, ResultadoValidacion
 from app.services import groq_client
 from app.services.gemini_client import DEFAULT_MODEL as _MODELO_GEMINI_CLASIFICADOR
@@ -93,9 +94,10 @@ def _generador_fallback_clasificador(documento, contenido_prompt: str) -> Classi
     )
 
 # Nodos del Sprint 2
-from app.graph.consistencia import nodo_validacion_consistencia
 from app.graph.confianza import nodo_evaluacion_confianza
 from app.graph.routing import nodo_routing_condicional
+from app.graph.validation import validar_consistencia_clinica
+
 
 # Campos que la Validación Pydantic exige para considerar el documento
 # "completo" al cierre del Sprint 1 (Clasificador + Extractor).
@@ -266,6 +268,8 @@ def nodo_validacion_pydantic(state: MediFlowState) -> dict:
 
     clasificacion = state.get("clasificacion")
     extraccion = state.get("extraccion")
+    
+    
 
     if clasificacion is None:
         errores.append(
@@ -297,6 +301,20 @@ def nodo_validacion_pydantic(state: MediFlowState) -> dict:
     )
 
     return resultado.model_dump()
+
+    def nodo_validacion_consistencia(state: MediFlowState) -> dict:
+        """
+        Nodo independiente para el módulo MF-09.
+        Ejecuta la validación clínica y añade las inconsistencias al estado general.
+        """
+    respuesta_procesamiento = state.get("respuesta") 
+    resultado = validar_consistencia_clinica(respuesta_procesamiento)
+
+    return {
+        "inconsistencias": resultado["inconsistencias"]
+    }
+
+
 
 
 def construir_grafo():
