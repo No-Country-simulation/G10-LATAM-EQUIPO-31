@@ -23,6 +23,7 @@ from app.schemas.clasificacion import Classification, DocumentType
 from app.schemas.extraccion import ExtraccionClinica
 from app.schemas.state import MediFlowState, ResultadoValidacion
 from app.services import groq_client
+from app.services.gemini_client import DEFAULT_MODEL as _MODELO_GEMINI_CLASIFICADOR
 from app.services.gemini_provider import ProveedorGemini
 
 # MF-19 | Fallback tecnico: Gemini sigue siendo el modelo PRINCIPAL en
@@ -42,6 +43,42 @@ _MODELO_CLASIFICADOR_FALLBACK = (
 _MODELO_EXTRACTOR_FALLBACK = (
     os.getenv("GROQ_EXTRACTOR_MODEL_FALLBACK") or groq_client.MODELO_GROQ_POR_DEFECTO
 )
+
+
+class _ProveedorContado:
+    """
+    MF-15 | Envuelve un proveedor LLM y cuenta cuantas veces se lo invoca
+    (cada llamada es un intento), sin cambiar su comportamiento. Los
+    demas atributos (modelo, api_key, ...) se delegan al proveedor real.
+    """
+
+    def __init__(self, proveedor):
+        self._proveedor = proveedor
+        self.llamadas = 0
+
+    def generar(self, *args, **kwargs):
+        self.llamadas += 1
+        return self._proveedor.generar(*args, **kwargs)
+
+    def __getattr__(self, nombre):
+        return getattr(self._proveedor, nombre)
+
+
+def _metadata_llm(origen, intentos_principal, intentos_fallback, modelo_principal, modelo_fallback) -> dict:
+    """
+    MF-15 | Arma el detalle de trazabilidad de un agente.
+    origen: "principal", "fallback" o None (fallaron todos los modelos).
+    fallback_utilizado = True si se llego a intentar el fallback, aunque
+    tambien haya fallado.
+    """
+    por_fallback = origen == "fallback"
+    return {
+        "proveedor_usado": None if origen is None else ("groq" if por_fallback else "gemini"),
+        "modelo_usado": None if origen is None else (modelo_fallback if por_fallback else modelo_principal),
+        "fallback_utilizado": intentos_fallback > 0,
+        "intentos_principal": intentos_principal,
+        "intentos_fallback": intentos_fallback,
+    }
 
 
 def _generador_fallback_clasificador(documento, contenido_prompt: str) -> Classification:
@@ -120,12 +157,24 @@ def nodo_clasificador(state: MediFlowState) -> dict:
 
     documento = state["documento"]
 
+    meta: dict = {}
     clasificacion = clasificar_documento(
         documento,
         generador_fallback=_generador_fallback_clasificador if _GROQ_API_KEY else None,
+        metadata=meta,
     )
 
     resultado = {"clasificacion": clasificacion}
+
+    # MF-15: trazabilidad de que modelo respondio (solo si el agente la informo).
+    if meta:
+        resultado["metadata_clasificacion"] = _metadata_llm(
+            meta.get("origen"),
+            meta.get("intentos_principal", 0),
+            meta.get("intentos_fallback", 0),
+            _MODELO_GEMINI_CLASIFICADOR,
+            _MODELO_CLASIFICADOR_FALLBACK,
+        )
 
     # MF-19: si fallaron el principal y el fallback, se deja constancia en
     # el estado para que el procesamiento NO se marque como exitoso.
@@ -152,8 +201,11 @@ def nodo_extractor(state: MediFlowState) -> dict:
     if state.get("fallos_tecnicos"):
         return {}
 
+    proveedor_principal = _ProveedorContado(ProveedorGemini())
     proveedor_fallback = (
-        groq_client.ProveedorGroq(api_key=_GROQ_API_KEY, modelo=_MODELO_EXTRACTOR_FALLBACK)
+        _ProveedorContado(
+            groq_client.ProveedorGroq(api_key=_GROQ_API_KEY, modelo=_MODELO_EXTRACTOR_FALLBACK)
+        )
         if _GROQ_API_KEY
         else None
     )
@@ -161,11 +213,26 @@ def nodo_extractor(state: MediFlowState) -> dict:
     extraccion = extraer_datos_clinicos(
         documento=documento,
         clasificacion=clasificacion,
-        proveedor=ProveedorGemini(),
+        proveedor=proveedor_principal,
         proveedor_fallback=proveedor_fallback,
     )
 
     resultado = {"extraccion": extraccion}
+
+    # MF-15: trazabilidad de que proveedor respondio (cada llamada = un intento).
+    llamadas_fallback = proveedor_fallback.llamadas if proveedor_fallback else 0
+    if proveedor_principal.llamadas or llamadas_fallback:
+        if _extraccion_fallo_tecnico_total(extraccion):
+            origen = None
+        else:
+            origen = "fallback" if llamadas_fallback else "principal"
+        resultado["metadata_extraccion"] = _metadata_llm(
+            origen,
+            proveedor_principal.llamadas,
+            llamadas_fallback,
+            getattr(proveedor_principal, "modelo", None),
+            _MODELO_EXTRACTOR_FALLBACK,
+        )
 
     # MF-19: si fallaron el principal y el fallback, se deja constancia en
     # el estado para que el procesamiento NO se marque como exitoso.

@@ -107,14 +107,20 @@ def _intentar(
     generador: Callable[[], Classification],
     etiqueta: str,
     errores: list[str],
+    traza: dict[str, int] | None = None,
 ) -> Classification | None:
     """
     Intenta hasta MAX_INTENTOS veces con UN generador (principal o
     fallback). Devuelve el resultado si tiene exito, o None si hay que
     escalar (al fallback, o a la degradacion controlada si no hay mas
     opciones).
+
+    traza (opcional, MF-15): si se pasa, deja en traza["intentos"] cuantos
+    intentos se hicieron con este generador.
     """
     for intento in range(1, MAX_INTENTOS + 1):
+        if traza is not None:
+            traza["intentos"] = intento
         try:
             return generador()
         except ErrorTecnicoProveedor as exc:
@@ -131,9 +137,30 @@ def _intentar(
     return None
 
 
+def _registrar_metadata(
+    metadata: dict[str, Any] | None,
+    origen: str | None,
+    traza_principal: dict[str, int],
+    traza_fallback: dict[str, int],
+) -> None:
+    """
+    MF-15 | Deja en `metadata` quien respondio y cuantos intentos hubo.
+    origen: "principal", "fallback" o None si fallaron todos los modelos.
+    Si `metadata` es None no hace nada (comportamiento previo intacto).
+    """
+    if metadata is None:
+        return
+    metadata.update(
+        origen=origen,
+        intentos_principal=traza_principal.get("intentos", 0),
+        intentos_fallback=traza_fallback.get("intentos", 0),
+    )
+
+
 def clasificar_documento(
     documento: DocumentoEntrada,
     generador_fallback: GeneradorClasificacion | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> Classification:
     """
     Ejecuta la clasificacion de un `DocumentoEntrada` via LLM multimodal.
@@ -144,12 +171,23 @@ def clasificar_documento(
         sigue funcionando igual que antes de MF-19, solo con reintentos
         + degradacion controlada. Ver app/graph/graph.py para como se
         conecta Groq como fallback real.
+    metadata: diccionario opcional (MF-15) que la funcion rellena con
+        {origen, intentos_principal, intentos_fallback}. No cambia lo que
+        devuelve la funcion.
     """
     contenido_prompt = _construir_prompt(documento)
     errores: list[str] = []
+    traza_principal: dict[str, int] = {}
+    traza_fallback: dict[str, int] = {}
 
-    resultado = _intentar(lambda: _generar_con_gemini(documento, contenido_prompt), "principal", errores)
+    resultado = _intentar(
+        lambda: _generar_con_gemini(documento, contenido_prompt),
+        "principal",
+        errores,
+        traza_principal,
+    )
     if resultado is not None:
+        _registrar_metadata(metadata, "principal", traza_principal, traza_fallback)
         return resultado
 
     if generador_fallback is not None:
@@ -158,9 +196,13 @@ def clasificar_documento(
             DEFAULT_MODEL,
         )
         resultado = _intentar(
-            lambda: generador_fallback(documento, contenido_prompt), "fallback", errores
+            lambda: generador_fallback(documento, contenido_prompt),
+            "fallback",
+            errores,
+            traza_fallback,
         )
         if resultado is not None:
+            _registrar_metadata(metadata, "fallback", traza_principal, traza_fallback)
             return resultado
     else:
         logger.warning(
@@ -172,6 +214,7 @@ def clasificar_documento(
         "Se agotaron todos los modelos disponibles para el Clasificador; "
         "devolviendo clasificacion no disponible."
     )
+    _registrar_metadata(metadata, None, traza_principal, traza_fallback)
     return _clasificacion_no_disponible("; ".join(errores))
 
 

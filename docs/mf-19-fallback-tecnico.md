@@ -190,6 +190,30 @@ realmente detectan una regresión y no solo pasan en falso.
   (`tests/test_groq_client.py::_pdf_de_prueba`), para la rasterización
   del fallback de Groq.
 
+### Trazabilidad: qué modelo respondió (pedido de MF-15)
+
+El estado del grafo incluye dos campos opcionales, `metadata_clasificacion`
+y `metadata_extraccion`, con este detalle por agente:
+
+| Campo | Significado |
+|---|---|
+| `proveedor_usado` | `"gemini"`, `"groq"` o `None` si fallaron todos los modelos |
+| `modelo_usado` | Modelo que respondió, o `None` si fallaron todos |
+| `fallback_utilizado` | `True` si se llegó a intentar el fallback, aunque también haya fallado |
+| `intentos_principal` | Intentos hechos con Gemini |
+| `intentos_fallback` | Intentos hechos con Groq (0 si no hizo falta) |
+
+No cambia los contratos de `Classification` ni de `ExtraccionClinica`, y
+no incluye mensajes de error (esos siguen en `fallos_tecnicos`). Si el
+Clasificador falla del todo y se omite el Extractor, `metadata_extraccion`
+no existe.
+
+Cómo se obtiene: `clasificar_documento()` acepta un parámetro opcional
+`metadata` (un diccionario que la función rellena; lo que devuelve no
+cambia). Para el Extractor, `nodo_extractor` cuenta las llamadas a cada
+proveedor sin modificar `extractor.py`; cada llamada a `generar()` cuenta
+como un intento, incluidos los reintentos por JSON inválido.
+
 ### Resultados del smoke test con credenciales reales
 
 Fecha: 30/09/2026 · Documento: `samples/ejemplo_receta_medica.txt` (texto) ·
