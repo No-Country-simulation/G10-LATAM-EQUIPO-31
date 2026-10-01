@@ -53,18 +53,18 @@ documentos clinicos. Tu unica tarea es identificar el tipo de documento y la \
 especialidad clinica asociada, sin extraer datos del paciente todavia.
 
 Tipos de documento validos:
-- receta_medica: prescripcion de medicamentos.
-- informe_estudio_diagnostico: informe de imagenes (radiografia, tomografia, \
-resonancia, ecografia) o de laboratorio.
-- orden_solicitud_procedimiento: orden o solicitud de un estudio/procedimiento \
+- "Receta Medica": prescripcion de medicamentos.
+- "Informe de Estudio de Diagnostico por Imagenes/Laboratorio": informe de imagenes \
+(radiografia, tomografia, resonancia, ecografia) o de laboratorio.
+- "Orden de Solicitud de Procedimiento": orden o solicitud de un estudio/procedimiento \
 que todavia no se realizo.
-- epicrisis_informe_alta: resumen de una hospitalizacion o informe de alta.
-- certificado_medico: certificado o constancia medica.
-- no_clasificado: usa este valor solo si el documento no encaja claramente en \
+- "Epicrisis / Informe de Alta": resumen de una hospitalizacion o informe de alta.
+- "Certificado Medico": certificado o constancia medica.
+- "No Clasificado": usa este valor solo si el documento no encaja claramente en \
 ninguna categoria anterior o el contenido es insuficiente.
 
-Responde siempre con una confianza entre 0 y 1, y una justificacion breve \
-(1-2 frases) de por que elegiste ese tipo y esa especialidad."""
+El campo tipo_documento debe corresponder exactamente a uno de los valores anteriores.
+No uses identificadores internos, nombres alternativos ni variantes para tipo_documento."""
 
 
 def _construir_prompt(documento: DocumentoEntrada) -> str:
