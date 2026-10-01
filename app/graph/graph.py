@@ -21,6 +21,7 @@ from app.agents.extractor import extraer_datos_clinicos
 from app.services.gemini_provider import ProveedorGemini
 from app.schemas.clasificacion import Classification
 from app.schemas.extraccion import ExtraccionClinica
+from app.graph.validation import validar_consistencia_clinica
 
 # Campos que la Validación Pydantic exige para considerar el documento
 # "completo" al cierre del Sprint 1 (Clasificador + Extractor).
@@ -86,6 +87,10 @@ def nodo_validacion_pydantic(state: MediFlowState) -> dict:
 
     clasificacion = state.get("clasificacion")
     extraccion = state.get("extraccion")
+    # Ejecutamos tu validación limpia
+    resultado = validar_consistencia_clinica(state)
+    
+    
 
     if clasificacion is None:
         errores.append(
@@ -116,7 +121,10 @@ def nodo_validacion_pydantic(state: MediFlowState) -> dict:
         errores_validacion=errores,
     )
 
-    return resultado.model_dump()
+    return {
+        "inconsistencias": errores + resultado["inconsistencias"]
+    }
+
 
 
 def construir_grafo():
