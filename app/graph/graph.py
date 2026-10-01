@@ -350,7 +350,7 @@ def construir_grafo():
     builder.add_node("clasificador", nodo_clasificador)
     builder.add_node("extractor", nodo_extractor)
     builder.add_node("validacion_pydantic", nodo_validacion_pydantic)
-    builder.add_node("consistencia", nodo_validacion_consistencia)
+    builder.add_node("consistencia", validar_consistencia_clinica)
     builder.add_node("evaluacion_confianza", nodo_evaluacion_confianza)
     builder.add_node("routing", nodo_routing_condicional)
 
