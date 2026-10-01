@@ -7,15 +7,15 @@ Responsable: Jennifer Silva
 Implementa el criterio documentado en docs/MF-10-criterio-confianza.md:
 combina la autoevaluación del modelo (Classification.score_confianza_clasificacion)
 con las reglas de completitud (ExtraccionClinica.campos_no_encontrados +
-errores_validacion del Sprint 1).
+errores_validacion del Sprint 1 + inconsistencias clínicas MF-09).
+
+Aplica ponderación ponderada según criticidad:
+- Campos faltantes secundarios (sexo, fecha, documento): penalizan 0.05.
+- Campos faltantes críticos (paciente, profesional, diagnóstico, etc.): penalizan 0.10.
+- Errores de validación e inconsistencias clínicas: penalizan 0.10 siempre.
 
 Conectado en app/graph/graph.py, en la secuencia:
-    ... -> validacion_pydantic -> evaluacion_confianza -> END
-
-MF-11 (Urgencia y routing) reemplazará "evaluacion_confianza -> END" por
-"evaluacion_confianza -> <nodo_routing_condicional>", usando
-categoria_confianza y la señal de urgencia (clasificacion.nivel_prioridad
-y/o extraccion.nivel_urgencia) para decidir la ruta.
+    ... -> validacion_pydantic -> consistencia -> evaluacion_confianza -> routing -> END
 """
 from app.schemas.state import MediFlowState
 
@@ -25,11 +25,61 @@ PESO_REGLAS = 0.5
 UMBRAL_ALTA = 0.80
 UMBRAL_MEDIA = 0.50
 
+PENALIZACION_CRITICA = 0.10
+PENALIZACION_SECUNDARIA = 0.05
 
-def _calcular_score_reglas(motivos: list[str]) -> float:
-    """Penaliza 0.1 por cada motivo (campo faltante o error de validación),
-    sin bajar de 0.0. Ver docs/MF-10-criterio-confianza.md, sección 4.2."""
-    penalizacion = min(0.1 * len(motivos), 1.0)
+CAMPOS_SECUNDARIOS = {
+    "sexo",
+    "fecha",
+    "tipo_documento",
+    "numero_documento",
+    "tipo_doc",
+    "numero_doc",
+    "documento",
+    "fecha_emision",
+    "fecha_nacimiento",
+}
+
+
+def _calcular_score_reglas(
+    motivos: list[str] = None,
+    campos_faltantes: list[str] = None,
+    otros_motivos: list[str] = None,
+) -> float:
+    """
+    Calcula el score de reglas aplicando la distinción de pesos:
+    - Campos faltantes secundarios (sexo, fecha, doc): penalizan 0.05.
+    - Campos faltantes críticos (paciente, profesional, etc.): penalizan 0.10.
+    - Errores de validación e inconsistencias clínicas: penalizan 0.10 siempre.
+    Ver docs/MF-10-criterio-confianza.md.
+    """
+    if campos_faltantes is None and otros_motivos is None:
+        lista_motivos = motivos or []
+        penalizacion = 0.0
+        for item in lista_motivos:
+            item_lower = item.lower()
+            if any(sec in item_lower for sec in CAMPOS_SECUNDARIOS):
+                penalizacion += PENALIZACION_SECUNDARIA
+            else:
+                penalizacion += PENALIZACION_CRITICA
+        penalizacion = min(penalizacion, 1.0)
+        return round(max(0.0, 1.0 - penalizacion), 2)
+
+    cf = campos_faltantes or []
+    om = otros_motivos or []
+
+    penalizacion = 0.0
+    for campo in cf:
+        campo_lower = campo.lower()
+        if any(sec in campo_lower for sec in CAMPOS_SECUNDARIOS):
+            penalizacion += PENALIZACION_SECUNDARIA
+        else:
+            penalizacion += PENALIZACION_CRITICA
+
+    # Errores estructurales e inconsistencias clínicas siempre penalizan 0.10
+    penalizacion += len(om) * PENALIZACION_CRITICA
+
+    penalizacion = min(penalizacion, 1.0)
     return round(max(0.0, 1.0 - penalizacion), 2)
 
 
@@ -71,8 +121,14 @@ def nodo_evaluacion_confianza(
     errores_estructurales = list(state.get("errores_validacion", []))
     inconsistencias_mf09 = list(state.get("inconsistencias", []))
 
-    motivos = campos_faltantes + errores_estructurales + inconsistencias_mf09
-    score_reglas = _calcular_score_reglas(motivos)
+    otros_motivos = errores_estructurales + inconsistencias_mf09
+    motivos = campos_faltantes + otros_motivos
+
+    score_reglas = _calcular_score_reglas(
+        motivos=motivos,
+        campos_faltantes=campos_faltantes,
+        otros_motivos=otros_motivos,
+    )
 
     score_final = round((score_autoeval * peso_modelo) + (score_reglas * peso_reglas), 2)
 
