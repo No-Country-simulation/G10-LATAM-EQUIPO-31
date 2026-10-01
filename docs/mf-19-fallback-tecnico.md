@@ -160,8 +160,9 @@ pytest -q tests/test_graph.py -k MF19
 
 Todas son pruebas controladas y automatizadas (no requieren credenciales
 reales de Gemini ni de Groq: se reemplazan los clientes HTTP por dobles
-de prueba, así son deterministas y no consumen cuota). **65/65 en
-verde** (59 de la implementación de MF-19 + 6 del grafo para el fallo total), `ruff check .` sin deuda nueva sobre `develop`. Se verificaron
+de prueba, así son deterministas y no consumen cuota). **92/92 en
+verde** (59 de la implementación de MF-19 + 6 del grafo para el fallo total + 14 de
+trazabilidad + 13 de documentos de texto en Groq), `ruff check .` sin deuda nueva sobre `develop`. Se verificaron
 además con *mutation testing* manual (desactivar a propósito cada pieza
 del mecanismo — la traducción de errores, el salto al fallback, el
 cableado en el grafo, la rasterización del PDF — y confirmar que la
@@ -176,6 +177,8 @@ realmente detectan una regresión y no solo pasan en falso.
 | `tests/test_groq_client.py` | Traducción de errores de Groq (429/5xx/timeout/respuesta vacía); `ProveedorGroq` cumple el protocolo del Extractor, incluida una integración real con `extraer_datos_clinicos`; modo estricto (`strict: true`) del Clasificador — schema, respuesta válida, respuesta que no cumple el schema; rasterización de PDF a imagen (con un PDF real generado con PyMuPDF) y el límite de 20 MB por imagen |
 | `tests/test_mf19_fallo_total.py` | Si fallan el principal y el fallback del **Clasificador**, el grafo devuelve `validacion_ok = False` con el motivo y no ejecuta el Extractor; una clasificación ambigua de un LLM que sí respondió **no** es fallo técnico; el detector del grafo coincide con la salida degradada real del Clasificador |
 | `tests/test_mf19_extractor_fallo_total.py` | Lo mismo para el **Extractor**: fallo total → `validacion_ok = False`; extracción incompleta de un LLM que sí respondió → sigue el flujo normal; el detector coincide con `_extraccion_vacia` |
+| `tests/test_mf19_metadata.py` | Trazabilidad (MF-15): qué proveedor y modelo respondió, si hubo fallback y cuántos intentos, en el Clasificador, en el Extractor y en el grafo completo; con fallo total `proveedor_usado` y `modelo_usado` quedan en `None`; sin el parámetro `metadata` todo sigue igual |
+| `tests/test_mf19_groq_texto.py` | Un documento de texto con `contenido_bytes` (`text/plain`, JSON, XML) se envía a Groq como **texto** y nunca como imagen; no se duplica el texto; PDF, imágenes y sin `mime_type` siguen como antes; un tipo no soportado lanza `ValueError` sin llamar a la API |
 | `tests/test_graph.py` (`TestCableadoDelFallbackMF19`) | Sin `GROQ_API_KEY` → el grafo NO conecta ningún fallback; con la key → se conecta en los dos agentes con los parámetros correctos |
 
 ### Documentos utilizados para la validación
@@ -246,6 +249,16 @@ script de prueba no se versiona y no escribe ninguna clave en disco.
 | **A** | Gemini falla; Groq real | Gemini falló 3/3 intentos en cada agente; Groq respondió `200 OK` en ambos. Clasificación `RECETA_MEDICA` (score 0.98, Medicina General) y extracción válida (paciente "Ana Torres", 1 diagnóstico). `validacion_ok = True`. Tiempo total: 9,7 s |
 | **B** | Gemini y Groq fallan en el Clasificador | Gemini 3/3 y Groq 3/3 (HTTP 401). Se registró `ERROR` en el log del Clasificador; `validacion_ok = False`, con el motivo en `errores_validacion` y `fallos_tecnicos`. El Extractor no se ejecutó |
 | **C** | Clasificador OK vía Groq; Extractor falla en Gemini y en Groq (modelo inexistente, HTTP 404) | Se registró `ERROR` en el log del Extractor; `validacion_ok = False` con el motivo `Extractor: fallaron el modelo principal y el fallback` |
+
+**Prueba real tras el reporte de MF-20 (01/10/2026).** Mismo documento, Gemini
+forzado a fallar y Groq real, con tres formas de entrada. Se comprobó la
+corrección de los documentos de texto:
+
+| Variante | Resultado observado |
+|---|---|
+| Solo `documento_texto` | Groq respondió en ambos agentes (el Extractor necesitó 3 intentos). `RECETA_MEDICA`, paciente "Ana Torres", `validacion_ok = True` |
+| Solo `contenido_bytes` con `text/plain` (caso de MF-20) | Groq respondió al primer intento en ambos agentes. `RECETA_MEDICA`, paciente "Ana Torres", `validacion_ok = True` |
+| `documento_texto` y `contenido_bytes` | Igual que la anterior, sin texto duplicado |
 
 Con esto se comprobó con servicios reales: que el fallback se activa solo
 ante fallos técnicos, que respeta los contratos de salida (Groq devolvió
