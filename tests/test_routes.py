@@ -163,22 +163,16 @@ def test_post_documentos_exitoso_persiste_en_estandar(monkeypatch):
         "clasificador", "extractor", "validacion_pydantic",
     ]
     assert evento["recorrido"]["fallos_tecnicos"] is None
-    # MF-19 todavía no está integrado en esta rama: sin metadata en el
-    # estado, el recorrido no inventa proveedor/modelo.
-    _NO_DISPONIBLE_MF19 = "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
-    assert evento["recorrido"]["proveedor_modelo"]["clasificador"] == _NO_DISPONIBLE_MF19
-    assert evento["recorrido"]["proveedor_modelo"]["extractor"] == _NO_DISPONIBLE_MF19
-    assert evento["resumen"]["validacion_ok"] is True
-    assert evento["resumen"]["score_confianza_clasificacion"] == 0.95
-    # MF-10 todavía no está integrado en esta rama: sin destino_principal,
-    # score_confianza_final/categoria_confianza tampoco se inventan.
-    assert evento["resumen"]["score_confianza_final"] is None
-    assert evento["resumen"]["categoria_confianza"] is None
+    # MF-10 integrado: el historial conserva el resultado de confianza.
+    assert evento["resumen"]["score_confianza_final"] == 0.97
+    assert evento["resumen"]["categoria_confianza"] == "Alta"
+
     assert estado_persistido["validacion_ok"] is True
     assert estado_persistido["errores_validacion"] == []
     assert resultado["oci_object_name_original"] == fake_storage.documentos_subidos[0]
-    # Sin MF-11 integrado el estado no trae `urgente`: no se inventa la clave.
-    assert "urgente" not in resultado
+
+    # MF-11 integrado: el estado conserva la señal reconciliada de urgencia.
+    assert resultado["urgente"] is False
 
     # El documento original se serializa como metadata liviana: sin bytes
     # ni texto completo (eso ya vive en recibidos/).

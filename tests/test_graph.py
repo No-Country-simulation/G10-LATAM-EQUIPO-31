@@ -156,15 +156,24 @@ class TestCableadoDelFallbackMF19:
         monkeypatch.setattr(graph, "_GROQ_API_KEY", None)
 
         capturado = {}
+
+        def clasificador_mock(_documento, **kwargs):
+            capturado["clasificador"] = kwargs
+            return CLASIFICACION_PRUEBA
+
+        def extractor_mock(**kwargs):
+            capturado["extractor"] = kwargs
+            return EXTRACCION_PRUEBA
+
         monkeypatch.setattr(
             graph,
             "clasificar_documento",
-            lambda _documento, **kwargs: capturado.setdefault("clasificador", kwargs) or CLASIFICACION_PRUEBA,
+            clasificador_mock,
         )
         monkeypatch.setattr(
             graph,
             "extraer_datos_clinicos",
-            lambda **kwargs: capturado.setdefault("extractor", kwargs) or EXTRACCION_PRUEBA,
+            extractor_mock,
         )
         monkeypatch.setattr(graph, "ProveedorGemini", lambda modelo=None: object())
 
@@ -178,15 +187,24 @@ class TestCableadoDelFallbackMF19:
         monkeypatch.setattr(graph, "_GROQ_API_KEY", "clave-de-prueba")
 
         capturado = {}
+
+        def clasificador_mock(_documento, **kwargs):
+            capturado["clasificador"] = kwargs
+            return CLASIFICACION_PRUEBA
+
+        def extractor_mock(**kwargs):
+            capturado["extractor"] = kwargs
+            return EXTRACCION_PRUEBA
+
         monkeypatch.setattr(
             graph,
             "clasificar_documento",
-            lambda _documento, **kwargs: capturado.setdefault("clasificador", kwargs) or CLASIFICACION_PRUEBA,
+            clasificador_mock,
         )
         monkeypatch.setattr(
             graph,
             "extraer_datos_clinicos",
-            lambda **kwargs: capturado.setdefault("extractor", kwargs) or EXTRACCION_PRUEBA,
+            extractor_mock,
         )
         monkeypatch.setattr(graph, "ProveedorGemini", lambda modelo=None: object())
         # ProveedorGroq real exige la API key al instanciarse; para esta

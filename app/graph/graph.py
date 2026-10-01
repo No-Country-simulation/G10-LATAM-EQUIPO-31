@@ -21,10 +21,12 @@ from app.agents.classifier import clasificar_documento
 from app.agents.extractor import extraer_datos_clinicos
 from app.schemas.clasificacion import Classification, DocumentType
 from app.schemas.extraccion import ExtraccionClinica
+
 from app.schemas.state import MediFlowState, ResultadoValidacion
 from app.services import groq_client
 from app.services.gemini_client import DEFAULT_MODEL as _MODELO_GEMINI_CLASIFICADOR
 from app.services.gemini_provider import ProveedorGemini
+from app.schemas.respuesta import RespuestaProcesamiento, ResultadoValidacion
 
 # MF-19 | Fallback tecnico: Gemini sigue siendo el modelo PRINCIPAL en
 # los dos agentes, sin cambios. Groq (qwen/qwen3.8-27b) es el proveedor
@@ -93,9 +95,10 @@ def _generador_fallback_clasificador(documento, contenido_prompt: str) -> Classi
     )
 
 # Nodos del Sprint 2
-from app.graph.validation import validar_consistencia_clinica
 from app.graph.confianza import nodo_evaluacion_confianza
 from app.graph.routing import nodo_routing_condicional
+from app.graph.validation import validar_consistencia_clinica
+
 
 # Campos que la Validación Pydantic exige para considerar el documento
 # "completo" al cierre del Sprint 1 (Clasificador + Extractor).
@@ -266,6 +269,8 @@ def nodo_validacion_pydantic(state: MediFlowState) -> dict:
 
     clasificacion = state.get("clasificacion")
     extraccion = state.get("extraccion")
+    
+    
 
     if clasificacion is None:
         errores.append(
@@ -298,6 +303,43 @@ def nodo_validacion_pydantic(state: MediFlowState) -> dict:
 
     return resultado.model_dump()
 
+def nodo_validacion_consistencia(state: MediFlowState) -> dict:
+    """
+    Nodo independiente para el módulo MF-09.
+    Adapta MediFlowState al contrato esperado por la validación clínica.
+    """
+    documento = state.get("documento")
+    clasificacion = state.get("clasificacion")
+    extraccion = state.get("extraccion")
+
+    # Si no existen los resultados de los agentes, la validación
+    # Pydantic anterior ya habrá registrado el error.
+    if clasificacion is None or extraccion is None:
+        return {"inconsistencias": []}
+
+    respuesta = RespuestaProcesamiento(
+        status="procesado",
+        documento_id=(
+            documento.documento_id
+            if documento is not None
+            else "sin-documento-id"
+        ),
+        clasificacion=clasificacion,
+        extraccion=extraccion,
+        validacion=ResultadoValidacion(
+            validacion_ok=state.get("validacion_ok", True),
+            errores_validacion=state.get("errores_validacion", []),
+        ),
+    )
+
+    resultado = validar_consistencia_clinica(respuesta)
+
+    return {
+        "inconsistencias": resultado["inconsistencias"]
+    }
+
+
+
 
 def construir_grafo():
     """Arma y compila el grafo. Sprint 2 le agregará ramas condicionales
@@ -308,7 +350,7 @@ def construir_grafo():
     builder.add_node("clasificador", nodo_clasificador)
     builder.add_node("extractor", nodo_extractor)
     builder.add_node("validacion_pydantic", nodo_validacion_pydantic)
-    builder.add_node("consistencia", validar_consistencia_clinica)
+    builder.add_node("consistencia", nodo_validacion_consistencia)
     builder.add_node("evaluacion_confianza", nodo_evaluacion_confianza)
     builder.add_node("routing", nodo_routing_condicional)
 

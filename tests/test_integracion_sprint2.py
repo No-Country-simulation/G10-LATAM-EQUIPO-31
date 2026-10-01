@@ -18,79 +18,33 @@ from app.schemas.respuesta import RespuestaProcesamiento, ResultadoValidacion
 # Importación del nodo de routing (MF-11)
 from app.graph.routing import nodo_routing_condicional
 
-# Importación de la validación de consistencia clínica (MF-09)
-try:
-    from app.services.validation import validar_consistencia_clinica
-except ImportError:
-    try:
-        from app.graph.validation import validar_consistencia_clinica
-    except ImportError:
-        def validar_consistencia_clinica(respuesta: RespuestaProcesamiento) -> ResultadoValidacion:
-            errores = []
-            clasif = respuesta.clasificacion
-            extrac = getattr(respuesta, "extraction", None) or getattr(respuesta, "extraccion", None)
 
-            if clasif and clasif.tipo_documento == DocumentType.RECETA_MEDICA:
-                if len(getattr(extrac, "estudios_solicitados", [])) > 0:
-                    errores.append(
-                        f"Inconsistencia: El documento está clasificado como 'Receta Médica', "
-                        f"pero contiene {len(extrac.estudios_solicitados)} estudio(s) solicitado(s)."
-                    )
-
-            prioridad_clasificador = clasif.nivel_prioridad.lower() if clasif and clasif.nivel_prioridad else ""
-            urgencia_extractor = (
-                extrac.nivel_urgencia.value.lower()
-                if hasattr(extrac.nivel_urgencia, "value")
-                else str(extrac.nivel_urgencia).lower()
-            ) if extrac and extrac.nivel_urgencia else ""
-
-            if "emergencia" in prioridad_clasificador or "urgente" in prioridad_clasificador:
-                if "no_urgente" in urgencia_extractor:
-                    errores.append(
-                        "Contradicción: El Agente Clasificador marca el caso como Urgente/Emergencia, "
-                        "pero el Agente Extractor determinó que las señales de gravedad son 'No Urgente'."
-                    )
-
-            if clasif and str(clasif.tipo_documento) != "No Clasificado":
-                if not extrac or not getattr(extrac, "paciente", None) or not getattr(extrac.paciente, "nombre_completo", None):
-                    errores.append("Datos faltantes: No se logró extraer el nombre completo del paciente.")
-
-            if extrac and getattr(extrac, "profesional", None):
-                prof = extrac.profesional
-                if getattr(prof, "registro_profesional", None) and not getattr(prof, "especialidad", None):
-                    errores.append(
-                        "Inconsistencia: Se extrajo el registro médico del profesional, "
-                        "pero no se pudo determinar su especialidad."
-                    )
-
-            return ResultadoValidacion(
-                validacion_ok=len(errores) == 0,
-                errores_validacion=errores
-            )
-
+from app.graph.validation import validar_consistencia_clinica
 
 def nodo_validacion_consistencia(state: MediFlowState) -> dict:
     """
-    Wrapper que adapta MediFlowState al schema RespuestaProcesamiento
-    esperado por la función validar_consistencia_clinica (MF-09).
+    Wrapper de integración MF-09 para el pipeline Sprint 2.
     """
-    clasificacion = state.get("clasificacion")
-    extraccion = state.get("extraccion") or state.get("extraction")
+    respuesta = RespuestaProcesamiento(
+        status="procesado",
+        documento_id="TEST-INTEGRACION-SPRINT2",
+        clasificacion=state["clasificacion"],
+        extraccion=state["extraccion"],
+        validacion=ResultadoValidacion(
+            validacion_ok=state.get("validacion_ok", True),
+            errores_validacion=state.get("errores_validacion", []),
+        ),
 
-    # model_construct evita la validación estricta de campos obligatorios auxiliares
-    respuesta = RespuestaProcesamiento.model_construct(
-        clasificacion=clasificacion,
-        extraction=extraccion,
-        extraccion=extraccion,
-        status="PROCESADO",
-        documento_id="doc_test_integration"
     )
 
-    resultado: ResultadoValidacion = validar_consistencia_clinica(respuesta)
+    resultado = validar_consistencia_clinica(respuesta)
 
     return {
-        "inconsistencias": resultado.errores_validacion,
-        "validacion_ok": state.get("validacion_ok", True) and resultado.validacion_ok
+        "inconsistencias": resultado["inconsistencias"],
+        "validacion_ok": (
+            state.get("validacion_ok", True)
+            and len(resultado["inconsistencias"]) == 0
+        ),
     }
 
 
@@ -250,7 +204,7 @@ def test_integracion_escenario_inconsistente_va_a_hitl():
     estado_final = _ejecutar_pipeline_sprint2(estado_inicial)
 
     assert len(estado_final["inconsistencias"]) > 0
-    assert "Receta Médica" in estado_final["inconsistencias"][0]
+    assert "Receta Medica" in estado_final["inconsistencias"][0]
     assert estado_final["categoria_confianza"] in ("Baja", "Media")
     assert estado_final["destino_principal"] == "revision_humana"
     assert estado_final["requiere_auditoria_humana"] is True
@@ -271,7 +225,9 @@ def test_integracion_regla_precedencia_urgente_con_inconsistencia():
     estado_final = _ejecutar_pipeline_sprint2(estado_inicial)
 
     assert len(estado_final["inconsistencias"]) > 0
-    assert "Contradicción" in estado_final["inconsistencias"][0]
+    assert "Conflicto de urgencia" in estado_final["inconsistencias"][0]
+
+    # Verifica la regla de precedencia
     assert estado_final["categoria_confianza"] in ("Baja", "Media")
     assert estado_final["destino_principal"] == "revision_humana"
     assert estado_final["requiere_auditoria_humana"] is True
