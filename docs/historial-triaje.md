@@ -54,8 +54,24 @@ trae), más dos bloques que agrega MF-15:
       "clasificador": "no_disponible (pendiente de que MF-19 lo exponga en el estado)",
       "extractor": "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
     },
-    "fallback_utilizado": "no_disponible (pendiente de que MF-19 lo exponga en el estado)",
     "fallos_tecnicos": null
+  }
+}
+```
+
+Cuando MF-19 esté integrado y el agente haya corrido, cada entrada de
+`proveedor_modelo` deja de ser el placeholder y pasa a ser el detalle
+completo tal cual lo trae el estado:
+
+```json
+"proveedor_modelo": {
+  "clasificador": {
+    "proveedor_usado": "groq", "modelo_usado": "qwen/qwen3.8-27b",
+    "fallback_utilizado": true, "intentos_principal": 3, "intentos_fallback": 1
+  },
+  "extractor": {
+    "proveedor_usado": "gemini", "modelo_usado": "gemini-3.5-flash-lite",
+    "fallback_utilizado": false, "intentos_principal": 1, "intentos_fallback": 0
   }
 }
 ```
@@ -81,12 +97,18 @@ trae), más dos bloques que agrega MF-15:
   (ya ponderado con completitud/consistencia). Ninguno pisa al otro.
 - **`recorrido`** — el paso a paso de la corrida:
   - `agentes_ejecutados`: qué nodos del grafo llegaron a correr.
-  - `proveedor_modelo` / `fallback_utilizado`: **ver limitación
-    conocida** más abajo — hoy quedan en `"no_disponible"` salvo que
-    haya fallado todo.
+  - `proveedor_modelo.clasificador` / `proveedor_modelo.extractor`
+    (MF-19): el contenido de `metadata_clasificacion` /
+    `metadata_extraccion` del estado, copiado tal cual, **por agente**
+    — `{proveedor_usado, modelo_usado, fallback_utilizado,
+    intentos_principal, intentos_fallback}`. Mismo criterio que
+    `destino_principal`/la confianza: nunca se inventa. Si el estado no
+    trae la metadata de ese agente (MF-19 sin integrar, o ese agente
+    nunca llegó a correr — ver más abajo), queda
+    `"no_disponible (pendiente de que MF-19 lo exponga en el estado)"`.
   - `fallos_tecnicos`: se copia tal cual desde el estado del grafo
-    (MF-19); es la única señal de proveedor/modelo que existe hoy, y
-    solo aparece cuando fallan **todos** los proveedores de un agente.
+    (MF-19); solo aparece cuando fallan **todos** los proveedores de un
+    agente.
 
 ## Cómo se calcula `agentes_ejecutados`
 
@@ -114,26 +136,28 @@ Regla aplicada en `routes.py`:
 Esta regla asume un grafo sin ramas condicionales; cuando MF-11 agregue
 bifurcaciones, conviene revisarla.
 
-## Limitación conocida: proveedor y modelo en el caso exitoso
+## Proveedor y modelo (MF-19)
 
-MF-19 (fallback técnico Gemini → Groq) no expone hoy, en el estado del
-grafo, **qué proveedor/modelo produjo el resultado final** cuando un
-agente SÍ tiene éxito — ni siquiera si tuvo que reintentar o caer al
-fallback antes de lograrlo. Esa información existe como variable local
-dentro de `clasificar_documento()` / `extraer_datos_clinicos()`
-(`app/agents/classifier.py`, `app/agents/extractor.py`) pero se
-descarta si el proveedor principal responde bien; solo sobrevive como
-texto embebido en `justificacion`/`observaciones` cuando fallan
-**todos** los proveedores de un agente.
+Mauricio (MF-19, todavía sin integrar a `develop`) agregó al estado del
+grafo `metadata_clasificacion` / `metadata_extraccion`, cada uno con
+`{proveedor_usado, modelo_usado, fallback_utilizado, intentos_principal,
+intentos_fallback}` — ver `docs/mf-19-fallback-tecnico.md`. `recorrido`
+los copia tal cual, por agente, con el mismo criterio defensivo
+(`.get()`) que ya usa el resto de `routes.py` para `destino_principal`
+y la confianza de MF-10.
 
-Por eso `recorrido.proveedor_modelo` y `recorrido.fallback_utilizado`
-quedan en `"no_disponible"` en vez de inventar el dato. Se le propuso a
-Mauricio (MF-19) exponer ese detalle como un campo adicional y opcional
-del estado (p. ej. `metadata_clasificacion` / `metadata_extraccion` con
-`proveedor_usado`/`modelo_usado`/`fallback_activado`/`intentos`) — sin
-tocar el contrato de `Classification`/`ExtraccionClinica` ni de nadie
-más. Cuando eso exista, `recorrido` puede leerlo con el mismo patrón
-`.get()` defensivo que ya usa el resto de `routes.py`.
+Dos casos en los que un agente queda en `"no_disponible"` aunque el otro
+sí tenga su metadata — no significa necesariamente que MF-19 no esté
+integrado, el mensaje es el mismo en ambos casos:
+
+1. **MF-19 todavía no está en `develop`** → ninguno de los dos agentes
+   trae metadata.
+2. **El Clasificador falló del todo** → el Extractor nunca llega a
+   correr (corta antes de llamar a cualquier LLM, ver
+   `app/graph/graph.py::nodo_extractor` en la rama de MF-19) y por lo
+   tanto nunca genera `metadata_extraccion`, aunque el Clasificador sí
+   tenga la suya (con `proveedor_usado`/`modelo_usado` en `None`, pero
+   `fallback_utilizado: true` si llegó a intentarlo).
 
 ## Reutiliza el servicio de OCI de MF-13
 
@@ -166,8 +190,14 @@ respuesta de `POST /documentos` suma `historial_ok` y
   falla el clasificador total (excluye extractor) vs. cuando falla el
   extractor total (lo incluye, porque sí llegó a correr), que sin MF-10
   integrado `score_confianza_final`/`categoria_confianza` quedan en
-  `null`, y que cuando el estado los trae se copian tal cual al resumen
-  (manteniendo `score_confianza_clasificacion` en paralelo, sin pisarlo).
+  `null`, que cuando el estado los trae se copian tal cual al resumen
+  (manteniendo `score_confianza_clasificacion` en paralelo, sin pisarlo),
+  que sin MF-19 integrado `proveedor_modelo.clasificador`/`.extractor`
+  quedan en `"no_disponible"`, que cuando el estado trae
+  `metadata_clasificacion`/`metadata_extraccion` se copian tal cual, y
+  que cuando falla el clasificador total el recorrido muestra la
+  metadata del Clasificador pero el Extractor sigue en
+  `"no_disponible"` (nunca corrió).
 - `samples/test_oci_historial.py` — script manual contra el bucket real
   (Gemini y Groq simulados, sin claves de modelos), con los 8 archivos
   de `samples/entradas/`: reprocesa cada uno dos veces y confirma -contra

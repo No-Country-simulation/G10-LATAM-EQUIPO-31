@@ -163,6 +163,11 @@ def test_post_documentos_exitoso_persiste_en_estandar(monkeypatch):
         "clasificador", "extractor", "validacion_pydantic",
     ]
     assert evento["recorrido"]["fallos_tecnicos"] is None
+    # MF-19 todavía no está integrado en esta rama: sin metadata en el
+    # estado, el recorrido no inventa proveedor/modelo.
+    _NO_DISPONIBLE_MF19 = "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
+    assert evento["recorrido"]["proveedor_modelo"]["clasificador"] == _NO_DISPONIBLE_MF19
+    assert evento["recorrido"]["proveedor_modelo"]["extractor"] == _NO_DISPONIBLE_MF19
     assert evento["resumen"]["validacion_ok"] is True
     assert evento["resumen"]["score_confianza_clasificacion"] == 0.95
     # MF-10 todavía no está integrado en esta rama: sin destino_principal,
@@ -687,6 +692,16 @@ class GrafoFalsoClasificadorFallaTotal:
                 "Clasificador: fallaron el modelo principal y el fallback.",
                 "No se generó un resultado de extracción.",
             ],
+            # MF-19: el Clasificador SÍ corrió (y generó su propia
+            # metadata, aunque fallara del todo); el Extractor nunca llegó
+            # a correr, así que metadata_extraccion no existe en el estado.
+            "metadata_clasificacion": {
+                "proveedor_usado": None,
+                "modelo_usado": None,
+                "fallback_utilizado": True,
+                "intentos_principal": 3,
+                "intentos_fallback": 3,
+            },
         }
 
 
@@ -779,3 +794,65 @@ def test_post_documentos_con_confianza_de_mf10_historial_incluye_resumen(monkeyp
     # en paralelo, no se pisa con score_confianza_final.
     assert evento["resumen"]["score_confianza_clasificacion"] == 0.95
     assert evento["resumen"]["destino_principal"] == "revision_humana"
+
+
+def test_post_documentos_con_metadata_de_mf19_historial_copia_proveedor_modelo(monkeypatch):
+    """Cuando el estado trae metadata_clasificacion/metadata_extraccion
+    (MF-19), el recorrido las copia tal cual, por agente -- mismo criterio
+    que destino_principal (MF-11) y la confianza (MF-10): ni se inventan
+    ni se recalculan acá."""
+
+    metadata_clasificacion = {
+        "proveedor_usado": "groq", "modelo_usado": "qwen/qwen3.8-27b",
+        "fallback_utilizado": True, "intentos_principal": 3, "intentos_fallback": 1,
+    }
+    metadata_extraccion = {
+        "proveedor_usado": "gemini", "modelo_usado": "gemini-3.5-flash-lite",
+        "fallback_utilizado": False, "intentos_principal": 1, "intentos_fallback": 0,
+    }
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "metadata_clasificacion": metadata_clasificacion,
+            "metadata_extraccion": metadata_extraccion,
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-007")
+
+    assert response.status_code == 200
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["proveedor_modelo"]["clasificador"] == metadata_clasificacion
+    assert evento["recorrido"]["proveedor_modelo"]["extractor"] == metadata_extraccion
+
+
+def test_post_documentos_clasificador_falla_total_no_hay_metadata_de_extractor(monkeypatch):
+    """Cuando el Clasificador falla del todo, el Extractor nunca llega a
+    correr (ver app/graph/graph.py::nodo_extractor en la rama de MF-19) --
+    el recorrido debe mostrar la metadata del Clasificador (sí corrió,
+    aunque fallara) pero seguir en "no_disponible" para el Extractor
+    (nunca generó metadata, no es que MF-19 no esté integrado)."""
+
+    monkeypatch.setattr(routes, "grafo_mediflow", GrafoFalsoClasificadorFallaTotal())
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-008")
+
+    assert response.status_code == 500
+    assert response.json()["estado"] == "error_tecnico"
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["proveedor_modelo"]["clasificador"] == {
+        "proveedor_usado": None, "modelo_usado": None, "fallback_utilizado": True,
+        "intentos_principal": 3, "intentos_fallback": 3,
+    }
+    assert evento["recorrido"]["proveedor_modelo"]["extractor"] == (
+        "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
+    )
