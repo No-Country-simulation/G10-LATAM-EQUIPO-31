@@ -190,6 +190,23 @@ realmente detectan una regresión y no solo pasan en falso.
   (`tests/test_groq_client.py::_pdf_de_prueba`), para la rasterización
   del fallback de Groq.
 
+### Documentos de texto en el fallback (corrección tras la prueba E2E de MF-20)
+
+En el flujo de FastAPI un TXT llega con `contenido_bytes` y
+`mime_type="text/plain"`. El cliente de Groq lo enviaba como imagen
+(`image_url`) y Groq respondía `400 invalid image data`. Las pruebas reales
+de MF-19 no lo detectaron porque pasaban el texto solo por
+`documento_texto`, sin bytes. Ahora `groq_client` decide por tipo:
+
+| `mime_type` | Cómo se envía a Groq |
+|---|---|
+| `text/*`, `application/json`, `application/xml` | Como **texto** dentro del mensaje (si el prompt ya incluye el texto, no se duplica) |
+| `application/pdf` | Primera página rasterizada a PNG (limitación conocida, sin cambios) |
+| `image/*` o sin `mime_type` | Como imagen (sin cambios) |
+| Cualquier otro | `ValueError`: es un problema de contenido, no un fallo técnico |
+
+Cubierto por `tests/test_mf19_groq_texto.py`.
+
 ### Trazabilidad: qué modelo respondió (pedido de MF-15)
 
 El estado del grafo incluye dos campos opcionales, `metadata_clasificacion`

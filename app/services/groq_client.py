@@ -33,6 +33,13 @@ limitacion aceptada y documentada: un PDF de varias paginas pierde el
 contenido de las paginas 2+ si el fallback llega a activarse justo en
 ese documento. Los documentos de imagen (JPG/PNG) no tienen esta
 limitacion.
+
+Tipos de contenido adjunto (`contenido_bytes` + `mime_type`):
+  * Texto (`text/*`, `application/json`, `application/xml`): se decodifica
+    y se envia como TEXTO dentro del mensaje, nunca como imagen.
+  * PDF: se rasteriza la primera pagina a PNG y se envia como imagen.
+  * Imagen (`image/*`) o sin mime_type: se envia como imagen.
+  * Cualquier otro tipo: `ValueError` (problema de contenido, no tecnico).
 """
 
 from __future__ import annotations
@@ -61,6 +68,9 @@ _REASONING_EFFORT = "none"
 # Limite documentado por Groq para requests que incluyen una imagen.
 _LIMITE_BYTES_IMAGEN = 20 * 1024 * 1024
 
+# Tipos no "text/*" que tambien son texto plano y deben enviarse como texto.
+_MIMES_TEXTO_ADICIONALES = {"application/json", "application/xml"}
+
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -85,16 +95,45 @@ def _pdf_a_png_primera_pagina(contenido_pdf: bytes) -> bytes:
         return pixmap.tobytes("png")
 
 
+def _normalizar_mime(mime_type: str | None) -> str:
+    """'text/plain; charset=utf-8' -> 'text/plain' (minusculas, sin parametros)."""
+    return (mime_type or "").split(";")[0].strip().lower()
+
+
+def _es_mime_texto(mime_type: str | None) -> bool:
+    mime = _normalizar_mime(mime_type)
+    return mime.startswith("text/") or mime in _MIMES_TEXTO_ADICIONALES
+
+
 def _preparar_imagen(contenido_bytes: bytes, mime_type: str | None) -> tuple[bytes, str]:
-    """Devuelve (bytes_de_imagen, mime_type_de_imagen), rasterizando el PDF si hace falta."""
-    if mime_type == "application/pdf":
+    """
+    Devuelve (bytes_de_imagen, mime_type_de_imagen), rasterizando el PDF si hace falta.
+    Solo debe llamarse con PDF, imagen o sin mime_type (el texto se envia como texto).
+    """
+    mime = _normalizar_mime(mime_type)
+    if mime == "application/pdf":
         return _pdf_a_png_primera_pagina(contenido_bytes), "image/png"
-    return contenido_bytes, mime_type or "image/jpeg"
+    if mime and not mime.startswith("image/"):
+        raise ValueError(
+            f"Groq no puede procesar documentos de tipo '{mime}'. "
+            "Solo admite texto, PDF e imagenes."
+        )
+    return contenido_bytes, mime or "image/jpeg"
 
 
 def _construir_contenido_usuario(
     prompt: str, contenido_bytes: bytes | None, mime_type: str | None
 ) -> list[dict]:
+    if contenido_bytes and _es_mime_texto(mime_type):
+        # Un TXT/JSON se envia como texto, NO como imagen (Groq responde
+        # 400 "invalid image data" si se le manda como image_url).
+        texto = contenido_bytes.decode("utf-8-sig", errors="replace").strip()
+        # Si el prompt ya incluye el texto del documento (documento_texto),
+        # no se duplica: ahorra tokens del plan gratuito (8.000/min).
+        if texto and texto not in prompt:
+            prompt = f"{prompt}\n\nContenido del documento adjunto:\n{texto}"
+        return [{"type": "text", "text": prompt}]
+
     contenido: list[dict] = [{"type": "text", "text": prompt}]
     if contenido_bytes:
         imagen_bytes, imagen_mime = _preparar_imagen(contenido_bytes, mime_type)
