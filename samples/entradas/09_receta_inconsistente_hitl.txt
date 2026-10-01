@@ -1,0 +1,25 @@
+CENTRO MÉDICO VIDA
+
+RECETA MÉDICA
+
+Paciente: Carlos Andrés Martínez
+Edad: 52 años
+
+Médico tratante: Dra. Laura Fernández
+Matrícula profesional: MP-85241
+
+Diagnóstico:
+Hipertensión arterial
+
+CIE-10: I10
+
+Medicamento:
+Losartán 50 mg
+Dosis: 1 tableta cada 12 horas durante 30 días.
+
+Estudio solicitado:
+Tomografía computarizada de tórax con contraste.
+
+Especialidad: Cardiología
+
+Prioridad: Rutina
