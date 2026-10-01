@@ -247,10 +247,15 @@ async def recibir_documento(
         # nodo), así que no se puede asumir que cada elemento ya sea str.
         error_persistido = "; ".join(str(fallo) for fallo in fallos_tecnicos)
 
+    # Un único timestamp para todo lo que se persiste de esta corrida: el
+    # campo `timestamp` del envelope y el nombre de archivo del evento de
+    # historial (MF-15, paso 7b) tienen que referirse al mismo instante.
+    momento = datetime.now(timezone.utc)
+
     envelope = {
         "documento_id": documento_id,
         "estado": estado,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": momento.isoformat(),
         "oci_object_name_original": object_name,
         "nivel_urgencia": nivel_urgencia,
         "resultado": estado_completo,
@@ -276,6 +281,94 @@ async def recibir_documento(
         oci_object_name_resultado = None
         persistencia_ok = False
 
+    # 7b. Historial de triaje (MF-15): a diferencia de `procesados/*`, que
+    #     guarda solo el ÚLTIMO resultado conocido, acá cada corrida queda
+    #     como un evento nuevo bajo `historial/{documento_id}/`, sin pisar
+    #     las anteriores (ver docs/historial-triaje.md).
+    agentes_ejecutados: list[str] = []
+    if estado_completo is not None:
+        agentes_ejecutados.append("clasificador")
+        # MF-19: el nodo extractor corta ANTES de llamar a ningún LLM si
+        # el clasificador ya agotó Gemini y el fallback (no tiene sentido
+        # gastar cuota del Extractor sin una clasificación válida) -- ver
+        # app/graph/graph.py::nodo_extractor. Cuando eso pasa, el estado
+        # nunca llega a tener la clave "extraccion". Si el extractor SÍ
+        # corrió (con éxito o degradado por su propio fallo técnico),
+        # "extraccion" está presente sin importar fallos_tecnicos.
+        extractor_omitido = bool(fallos_tecnicos) and "extraccion" not in estado_completo
+        if not extractor_omitido:
+            agentes_ejecutados.append("extractor")
+        agentes_ejecutados.append("validacion_pydantic")
+
+    clasificacion_persistida = estado_completo.get("clasificacion") if estado_completo else None
+    resumen = {
+        # Autoevaluación cruda del modelo (MF-05/MF-06), un solo número de
+        # Gemini -- se mantiene aparte de score_confianza_final (MF-10):
+        # responde una pregunta distinta ("qué pensó el modelo" vs. "en
+        # qué confiamos al final", ya combinado con reglas de completitud).
+        "score_confianza_clasificacion": (
+            clasificacion_persistida.get("score_confianza_clasificacion")
+            if clasificacion_persistida
+            else None
+        ),
+        # MF-10: score combinado (autoevaluación + completitud/consistencia)
+        # y su categoría ("Alta"/"Media"/"Baja") -- es la señal que
+        # nodo_routing_condicional (MF-11) usa para decidir destino_principal.
+        # Mismo criterio que destino_principal: solo si el estado las trae,
+        # sin inventar un valor cuando MF-10 todavía no está integrado.
+        "score_confianza_final": (
+            estado_completo.get("score_confianza_final") if estado_completo else None
+        ),
+        "categoria_confianza": (
+            estado_completo.get("categoria_confianza") if estado_completo else None
+        ),
+        "destino_principal": destino_principal,
+        "requiere_auditoria_humana": (
+            estado_completo.get("requiere_auditoria_humana") if estado_completo else None
+        ),
+        "validacion_ok": validacion_ok,
+    }
+
+    # `proveedor_modelo`: MF-19 (todavía no integrado en develop) agrega al
+    # estado `metadata_clasificacion`/`metadata_extraccion`, cada uno con
+    # {proveedor_usado, modelo_usado, fallback_utilizado, intentos_principal,
+    # intentos_fallback} -- ver docs/historial-triaje.md. Se copian tal
+    # cual, por agente, mismo criterio que destino_principal: nunca se
+    # inventan. Si el estado no las trae (MF-19 sin integrar) o el
+    # Extractor se omitió (fallo total del Clasificador: nunca llega a
+    # correr, así que nunca genera metadata_extraccion), queda el mismo
+    # placeholder de siempre.
+    _METADATA_NO_DISPONIBLE = "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
+    metadata_clasificacion = estado_completo.get("metadata_clasificacion") if estado_completo else None
+    metadata_extraccion = estado_completo.get("metadata_extraccion") if estado_completo else None
+
+    recorrido = {
+        "agentes_ejecutados": agentes_ejecutados,
+        "proveedor_modelo": {
+            "clasificador": metadata_clasificacion if metadata_clasificacion is not None else _METADATA_NO_DISPONIBLE,
+            "extractor": metadata_extraccion if metadata_extraccion is not None else _METADATA_NO_DISPONIBLE,
+        },
+        "fallos_tecnicos": fallos_tecnicos,
+    }
+
+    evento_historial = {**envelope, "resumen": resumen, "recorrido": recorrido}
+
+    try:
+        oci_object_name_historial = storage.upload_historial(
+            documento_id, momento, evento_historial
+        )
+        historial_ok = True
+    except PersistenciaOCIError as exc:
+        # Igual que con upload_resultado: un fallo acá no debe tirar abajo
+        # una respuesta cuyo procesamiento (y persistencia en procesados/)
+        # sí fue exitoso.
+        logger.error(
+            "No se pudo guardar el historial de triaje de documento_id=%s: %s",
+            documento_id, exc,
+        )
+        oci_object_name_historial = None
+        historial_ok = False
+
     # 8. Construir la respuesta del flujo integrado
     respuesta = {
         "status": "error" if es_error_tecnico else "procesado",
@@ -287,6 +380,8 @@ async def recibir_documento(
         "estado": estado,
         "persistencia_ok": persistencia_ok,
         "oci_object_name_resultado": oci_object_name_resultado,
+        "historial_ok": historial_ok,
+        "oci_object_name_historial": oci_object_name_historial,
         **cuerpo_resultado,
         "mensaje": (
             "Fallo técnico al procesar el documento"

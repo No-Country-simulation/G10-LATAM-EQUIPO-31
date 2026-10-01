@@ -150,10 +150,13 @@ las señales las producen el Agente Extractor (MF-06) y el enrutamiento
 ## Reprocesar el mismo `documento_id`
 
 Si se vuelve a procesar un documento con el mismo `documento_id`, el
-resultado se **sobrescribe**: no hay versionado ni historial de reprocesos
-todavía. El documento original en `recibidos/` tampoco se ve afectado por
-esto (vive en un namespace de objeto distinto). El historial de reprocesos
-(guardar cada intento en vez de solo el último) queda para el Sprint 3.
+resultado en `procesados/*`/`errores_tecnicos/` se **sobrescribe**: no hay
+versionado ahí. El documento original en `recibidos/` tampoco se ve
+afectado por esto (vive en un namespace de objeto distinto).
+
+Desde MF-15, cada corrida (sobrescriba o no el resultado) además queda
+registrada como un evento nuevo en `historial/{documento_id}/`, que
+**nunca se pisa** — ver [`historial-triaje.md`](historial-triaje.md).
 
 ## Verificación de escritura y manejo de errores de persistencia
 
@@ -202,9 +205,12 @@ uno con una respuesta distinta:
   requests concurrentes), la lectura de verificación de una request podría
   leer el contenido que escribió la otra, disparando un falso
   `PersistenciaOCIError`. Es consistente con que ya no hay versionado de
-  resultados (ver "Reprocesar el mismo `documento_id`"), pero vale tenerlo
-  presente como limitación conocida hasta que el Sprint 3 aborde el
-  historial de reprocesos.
+  resultados (ver "Reprocesar el mismo `documento_id`"). `upload_historial`
+  (MF-15) tiene la misma limitación de fondo en su propia verificación,
+  aunque ahí el riesgo de colisión es mucho menor: cada evento usa un
+  nombre de archivo distinto (con microsegundos), así que dos requests
+  concurrentes solo chocarían si el reloj del sistema repitiera el mismo
+  microsegundo exacto para el mismo `documento_id`.
 
 ## Pruebas
 

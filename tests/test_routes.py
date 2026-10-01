@@ -6,6 +6,7 @@ resultado en OCI (MF-13). Los agentes del grafo y el servicio de OCI se
 mockean/reemplazan para no depender de Gemini ni de credenciales reales,
 siguiendo el mismo patrón que tests/test_graph.py.
 """
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -35,11 +36,18 @@ class FakeOCIStorageService:
     """Reemplaza a OCIStorageService en las pruebas de la ruta: guarda en
     memoria lo que la ruta intentó persistir, sin tocar OCI real."""
 
-    def __init__(self, fallar_upload_resultado=False, fallar_upload_document=False):
+    def __init__(
+        self,
+        fallar_upload_resultado=False,
+        fallar_upload_document=False,
+        fallar_upload_historial=False,
+    ):
         self.documentos_subidos = []
         self.resultados_subidos = []
+        self.historial_subido = []
         self._fallar_upload_resultado = fallar_upload_resultado
         self._fallar_upload_document = fallar_upload_document
+        self._fallar_upload_historial = fallar_upload_historial
 
     def upload_document(self, document_id, content, filename):
         if self._fallar_upload_document:
@@ -55,6 +63,17 @@ class FakeOCIStorageService:
         # ruta intentara persistir un estado que no existe).
         object_name = f"{ESTADOS_A_PREFIJO[estado]}{documento_id}.json"
         self.resultados_subidos.append((documento_id, estado, resultado))
+        return object_name
+
+    def upload_historial(self, documento_id, momento, evento):
+        if self._fallar_upload_historial:
+            raise PersistenciaOCIError("fallo simulado de OCI (historial)")
+        # No reproduce el formato exacto del object_name real (eso ya lo
+        # prueba tests/test_oci_storage_service.py contra el servicio de
+        # verdad); acá solo hace falta que sea único por momento, para
+        # poder comprobar que un reproceso no pisa el anterior.
+        object_name = f"historial/{documento_id}/{momento.isoformat()}.json"
+        self.historial_subido.append((documento_id, momento, evento))
         return object_name
 
 
@@ -132,6 +151,29 @@ def test_post_documentos_exitoso_persiste_en_estandar(monkeypatch):
     # campos elegidos a mano.
     estado_persistido = resultado["resultado"]
     assert estado_persistido["extraccion"]["nivel_urgencia"] == "no_urgente"
+
+    # MF-15: además de procesados/, el mismo procesamiento queda registrado
+    # como un evento de historial (clasificador + extractor + validación
+    # corrieron los tres, sin fallas técnicas).
+    assert body["historial_ok"] is True
+    assert body["oci_object_name_historial"] is not None
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["agentes_ejecutados"] == [
+        "clasificador", "extractor", "validacion_pydantic",
+    ]
+    assert evento["recorrido"]["fallos_tecnicos"] is None
+    # MF-19 todavía no está integrado en esta rama: sin metadata en el
+    # estado, el recorrido no inventa proveedor/modelo.
+    _NO_DISPONIBLE_MF19 = "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
+    assert evento["recorrido"]["proveedor_modelo"]["clasificador"] == _NO_DISPONIBLE_MF19
+    assert evento["recorrido"]["proveedor_modelo"]["extractor"] == _NO_DISPONIBLE_MF19
+    assert evento["resumen"]["validacion_ok"] is True
+    assert evento["resumen"]["score_confianza_clasificacion"] == 0.95
+    # MF-10 todavía no está integrado en esta rama: sin destino_principal,
+    # score_confianza_final/categoria_confianza tampoco se inventan.
+    assert evento["resumen"]["score_confianza_final"] is None
+    assert evento["resumen"]["categoria_confianza"] is None
     assert estado_persistido["validacion_ok"] is True
     assert estado_persistido["errores_validacion"] == []
     assert resultado["oci_object_name_original"] == fake_storage.documentos_subidos[0]
@@ -450,6 +492,7 @@ def test_post_documentos_tipo_no_soportado_no_persiste_nada(monkeypatch):
     assert response.status_code == 415
     assert fake_storage.documentos_subidos == []
     assert fake_storage.resultados_subidos == []
+    assert fake_storage.historial_subido == []
 
 
 def test_post_documentos_fallo_de_persistencia_no_tumba_la_respuesta(monkeypatch):
@@ -505,6 +548,15 @@ def test_post_documentos_formatos_binarios_de_samples_entradas(
     assert "contenido_bytes" not in documento_persistido
     assert "documento_texto" not in documento_persistido
 
+    # MF-15: el evento de historial reusa el mismo estado_completo
+    # serializado, así que hereda gratis la misma exclusión de contenido
+    # pesado.
+    assert body["historial_ok"] is True
+    _, _, evento = fake_storage.historial_subido[0]
+    documento_en_historial = evento["resultado"]["documento"]
+    assert "contenido_bytes" not in documento_en_historial
+    assert "documento_texto" not in documento_en_historial
+
 
 def test_post_documentos_fallo_al_guardar_original_devuelve_503_estructurado(monkeypatch):
     """Si falla la subida del documento ORIGINAL, no tiene sentido correr el
@@ -524,3 +576,283 @@ def test_post_documentos_fallo_al_guardar_original_devuelve_503_estructurado(mon
 
     assert fake_storage.documentos_subidos == []
     assert fake_storage.resultados_subidos == []
+    assert fake_storage.historial_subido == []
+
+
+# --- MF-15: historial de triaje ---------------------------------------------
+
+
+def test_post_documentos_reprocesado_dos_veces_historial_no_se_pisa(monkeypatch):
+    """A diferencia de procesados/ (que pisa), cada corrida debe quedar
+    como un evento nuevo en el historial.
+
+    `datetime.now()` real puede devolver el MISMO microsegundo en dos
+    llamadas consecutivas si la máquina es rápida (pasó en la práctica),
+    lo que haría flaky esta prueba -- se controla el reloj de routes.py
+    para garantizar dos instantes distintos sin depender de la velocidad
+    de ejecución."""
+
+    momentos = iter([
+        datetime(2026, 1, 1, 12, 0, 0, 0, tzinfo=timezone.utc),
+        datetime(2026, 1, 1, 12, 0, 0, 1, tzinfo=timezone.utc),
+    ])
+
+    class _DatetimeControlado(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return next(momentos)
+
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+    monkeypatch.setattr(routes, "datetime", _DatetimeControlado)
+
+    respuesta_1 = _enviar_documento(client, documento_id="DOC-TEST-HIST-001")
+    respuesta_2 = _enviar_documento(client, documento_id="DOC-TEST-HIST-001")
+
+    assert respuesta_1.status_code == 200
+    assert respuesta_2.status_code == 200
+
+    # procesados/: sigue pisando, una sola entrada "viva" por documento_id
+    # en la lista del fake (semántica de sobrescritura, igual que el real).
+    assert len(fake_storage.resultados_subidos) == 2
+    assert fake_storage.resultados_subidos[0][0] == fake_storage.resultados_subidos[1][0]
+
+    # historial/: dos eventos distintos, ninguno se pisa.
+    assert len(fake_storage.historial_subido) == 2
+    object_name_1 = respuesta_1.json()["oci_object_name_historial"]
+    object_name_2 = respuesta_2.json()["oci_object_name_historial"]
+    assert object_name_1 is not None and object_name_2 is not None
+    assert object_name_1 != object_name_2
+
+
+def test_post_documentos_excepcion_en_el_grafo_historial_registra_sin_agentes_ejecutados(
+    monkeypatch,
+):
+    """Si el grafo crashea, no se puede saber con certeza en qué nodo
+    estaba -- el historial debe reflejar eso (lista vacía), no inventar
+    un recorrido."""
+
+    def clasificar_que_falla(_documento, **_kwargs):
+        raise RuntimeError("El proveedor Gemini no respondió (fallo técnico simulado)")
+
+    _configurar_agentes_mock(monkeypatch, clasificar=clasificar_que_falla)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-002")
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["estado"] == "error_tecnico"
+    assert body["historial_ok"] is True
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["agentes_ejecutados"] == []
+    assert evento["resultado"] is None
+    assert "RuntimeError" in evento["error"]
+
+
+def test_post_documentos_fallo_al_guardar_historial_no_tumba_la_respuesta(monkeypatch):
+    """Un fallo al guardar el HISTORIAL no debe afectar la respuesta ni la
+    persistencia en procesados/, que es independiente."""
+
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService(fallar_upload_historial=True)
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-003")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["estado"] == "estandar"
+    assert body["persistencia_ok"] is True
+    assert body["oci_object_name_resultado"] == "procesados/estandar/DOC-TEST-HIST-003.json"
+    assert body["historial_ok"] is False
+    assert body["oci_object_name_historial"] is None
+    assert fake_storage.historial_subido == []
+
+
+class GrafoFalsoClasificadorFallaTotal:
+    """Simula el estado que MF-19 produce cuando el clasificador agota
+    Gemini y el fallback: el extractor NUNCA llega a correr (corta antes
+    de llamar a ningún LLM, ver app/graph/graph.py::nodo_extractor en la
+    rama de MF-19), así que el estado no tiene clave "extraccion"."""
+
+    def invoke(self, estado_inicial):
+        return {
+            **estado_inicial,
+            "clasificacion": CLASIFICACION_PRUEBA,
+            "fallos_tecnicos": [
+                "Clasificador: fallaron el modelo principal y el fallback."
+            ],
+            "validacion_ok": False,
+            "errores_validacion": [
+                "Clasificador: fallaron el modelo principal y el fallback.",
+                "No se generó un resultado de extracción.",
+            ],
+            # MF-19: el Clasificador SÍ corrió (y generó su propia
+            # metadata, aunque fallara del todo); el Extractor nunca llegó
+            # a correr, así que metadata_extraccion no existe en el estado.
+            "metadata_clasificacion": {
+                "proveedor_usado": None,
+                "modelo_usado": None,
+                "fallback_utilizado": True,
+                "intentos_principal": 3,
+                "intentos_fallback": 3,
+            },
+        }
+
+
+def test_post_documentos_clasificador_falla_total_excluye_extractor_de_agentes_ejecutados(
+    monkeypatch,
+):
+    monkeypatch.setattr(routes, "grafo_mediflow", GrafoFalsoClasificadorFallaTotal())
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-004")
+
+    assert response.status_code == 500
+    assert response.json()["estado"] == "error_tecnico"
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["agentes_ejecutados"] == [
+        "clasificador", "validacion_pydantic",
+    ]
+    assert "extraccion" not in evento["resultado"]
+
+
+def test_post_documentos_extractor_falla_total_incluye_extractor_en_agentes_ejecutados(
+    monkeypatch,
+):
+    """Complemento del test anterior: si el clasificador SÍ tuvo éxito y es
+    el EXTRACTOR el que agota todo, sí llegó a correr (devuelve una
+    extracción degradada) -- no debe excluirse de agentes_ejecutados solo
+    porque fallos_tecnicos esté poblado."""
+
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "fallos_tecnicos": [
+                "Extractor: fallaron el modelo principal y el fallback."
+            ],
+            "validacion_ok": False,
+            "errores_validacion": [
+                "Extractor: fallaron el modelo principal y el fallback."
+            ],
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-005")
+
+    assert response.status_code == 500
+    assert response.json()["estado"] == "error_tecnico"
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["agentes_ejecutados"] == [
+        "clasificador", "extractor", "validacion_pydantic",
+    ]
+    assert "extraccion" in evento["resultado"]
+
+
+def test_post_documentos_con_confianza_de_mf10_historial_incluye_resumen(monkeypatch):
+    """Cuando el estado trae categoria_confianza/score_confianza_final
+    (MF-10), el resumen del historial los copia tal cual -- mismo criterio
+    que destino_principal (MF-11): ni se inventan ni se recalculan acá."""
+
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "destino_principal": "revision_humana",
+            "urgente": False,
+            "requiere_auditoria_humana": True,
+            "categoria_confianza": "Media",
+            "score_confianza_final": 0.7,
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-006")
+
+    assert response.status_code == 200
+    assert response.json()["estado"] == "revision_humana"
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["resumen"]["categoria_confianza"] == "Media"
+    assert evento["resumen"]["score_confianza_final"] == 0.7
+    # score_confianza_clasificacion (la autoevaluación cruda) se mantiene
+    # en paralelo, no se pisa con score_confianza_final.
+    assert evento["resumen"]["score_confianza_clasificacion"] == 0.95
+    assert evento["resumen"]["destino_principal"] == "revision_humana"
+
+
+def test_post_documentos_con_metadata_de_mf19_historial_copia_proveedor_modelo(monkeypatch):
+    """Cuando el estado trae metadata_clasificacion/metadata_extraccion
+    (MF-19), el recorrido las copia tal cual, por agente -- mismo criterio
+    que destino_principal (MF-11) y la confianza (MF-10): ni se inventan
+    ni se recalculan acá."""
+
+    metadata_clasificacion = {
+        "proveedor_usado": "groq", "modelo_usado": "qwen/qwen3.8-27b",
+        "fallback_utilizado": True, "intentos_principal": 3, "intentos_fallback": 1,
+    }
+    metadata_extraccion = {
+        "proveedor_usado": "gemini", "modelo_usado": "gemini-3.5-flash-lite",
+        "fallback_utilizado": False, "intentos_principal": 1, "intentos_fallback": 0,
+    }
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "metadata_clasificacion": metadata_clasificacion,
+            "metadata_extraccion": metadata_extraccion,
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-007")
+
+    assert response.status_code == 200
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["proveedor_modelo"]["clasificador"] == metadata_clasificacion
+    assert evento["recorrido"]["proveedor_modelo"]["extractor"] == metadata_extraccion
+
+
+def test_post_documentos_clasificador_falla_total_no_hay_metadata_de_extractor(monkeypatch):
+    """Cuando el Clasificador falla del todo, el Extractor nunca llega a
+    correr (ver app/graph/graph.py::nodo_extractor en la rama de MF-19) --
+    el recorrido debe mostrar la metadata del Clasificador (sí corrió,
+    aunque fallara) pero seguir en "no_disponible" para el Extractor
+    (nunca generó metadata, no es que MF-19 no esté integrado)."""
+
+    monkeypatch.setattr(routes, "grafo_mediflow", GrafoFalsoClasificadorFallaTotal())
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    response = _enviar_documento(client, documento_id="DOC-TEST-HIST-008")
+
+    assert response.status_code == 500
+    assert response.json()["estado"] == "error_tecnico"
+
+    assert len(fake_storage.historial_subido) == 1
+    _, _, evento = fake_storage.historial_subido[0]
+    assert evento["recorrido"]["proveedor_modelo"]["clasificador"] == {
+        "proveedor_usado": None, "modelo_usado": None, "fallback_utilizado": True,
+        "intentos_principal": 3, "intentos_fallback": 3,
+    }
+    assert evento["recorrido"]["proveedor_modelo"]["extractor"] == (
+        "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
+    )
