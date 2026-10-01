@@ -5,8 +5,8 @@ Esqueleto del grafo de estado de MediFlow — MF-07, Sprint 1.
 Responsable: Jennifer Silva / Apoyo: Kimberlyn Carchi (integración).
 
 Secuencia de este Sprint (según la actividad asignada):
-    Inicio -> Clasificador -> Extractor -> Validación Pydantic -> Fin
-
+    Inicio -> Clasificador -> Extractor -> Validación Pydantic (Spint 1) -> consistencia
+           -> evaluacion_confianza -> routing -> END
 IMPORTANTE: MediFlowState es un TypedDict (ver app/schemas/state.py), no
 tiene defaults en tiempo de ejecución. Por eso todas las lecturas de campos
 opcionales usan state.get("campo", default) en vez de state["campo"],
@@ -91,6 +91,11 @@ def _generador_fallback_clasificador(documento, contenido_prompt: str) -> Classi
         modelo=_MODELO_CLASIFICADOR_FALLBACK,
         api_key=_GROQ_API_KEY,
     )
+
+# Nodos del Sprint 2
+from app.graph.consistencia import nodo_validacion_consistencia
+from app.graph.confianza import nodo_evaluacion_confianza
+from app.graph.routing import nodo_routing_condicional
 
 # Campos que la Validación Pydantic exige para considerar el documento
 # "completo" al cierre del Sprint 1 (Clasificador + Extractor).
@@ -303,11 +308,17 @@ def construir_grafo():
     builder.add_node("clasificador", nodo_clasificador)
     builder.add_node("extractor", nodo_extractor)
     builder.add_node("validacion_pydantic", nodo_validacion_pydantic)
+    builder.add_node("consistencia", nodo_validacion_consistencia)
+    builder.add_node("evaluacion_confianza", nodo_evaluacion_confianza)
+    builder.add_node("routing", nodo_routing_condicional)
 
     builder.add_edge(START, "clasificador")
     builder.add_edge("clasificador", "extractor")
     builder.add_edge("extractor", "validacion_pydantic")
-    builder.add_edge("validacion_pydantic", END)
+    builder.add_edge("validacion_pydantic", "consistencia")
+    builder.add_edge("consistencia", "evaluacion_confianza")
+    builder.add_edge("evaluacion_confianza", "routing")
+    builder.add_edge("routing", END)
 
     return builder.compile()
 
