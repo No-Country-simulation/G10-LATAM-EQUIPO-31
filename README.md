@@ -21,10 +21,12 @@ La arquitectura está orquestada con LangGraph y combina dos agentes especializa
 - **Agente Clasificador:** identifica el tipo de documento y la especialidad clínica correspondiente.
 - **Agente Extractor:** extrae los datos clínicos estructurados según el tipo de documento clasificado.
 - **Validación (Pydantic):** valida tipos, formato y campos requeridos del JSON extraído.
-- **Evaluación de confianza:** calcula un score de confianza y detecta ambigüedad, inconsistencias o campos faltantes.
-- **Enrutamiento condicional:** deriva el documento a flujo estándar, cola de emergencia médica, o revisión humana (HITL), según urgencia y nivel de confianza.
-- **Fallback técnico:** ante fallos de la API del LLM (timeout, error 5xx, indisponibilidad), el sistema reintenta con un LLM alternativo antes de fallar.
+- **Validación de consistencia clínica:** detecta contradicciones entre lo que informa el Clasificador y lo que extrae el Extractor (por ejemplo, una receta médica que además incluye un estudio solicitado). Detalle en [docs/MF-10-criterio-confianza.md](docs/MF-10-criterio-confianza.md).
+- **Evaluación de confianza:** calcula un score de confianza combinando la autoevaluación del modelo con una penalización por reglas (campos faltantes, errores de validación e inconsistencias clínicas) y lo clasifica en Alta, Media o Baja. Detalle en [docs/MF-10-criterio-confianza.md](docs/MF-10-criterio-confianza.md).
+- **Enrutamiento condicional:** deriva el documento a uno de tres destinos (`estandar`, `urgente` o `revision_humana`) según la urgencia y la categoría de confianza, con precedencia de la confianza sobre la urgencia. Detalle en [docs/MF-11-urgencia-routing.md](docs/MF-11-urgencia-routing.md).
+- **Fallback técnico:** ante fallos de la API del LLM principal (timeout, error 429/5xx, indisponibilidad), el sistema reintenta con un proveedor secundario (Groq) antes de fallar. Detalle en [docs/mf-19-fallback-tecnico.md](docs/mf-19-fallback-tecnico.md).
 - **Persistencia:** los documentos originales se almacenan en `recibidos/`, y el resultado del flujo se persiste aparte según su destino (`procesados/estandar/`, `procesados/urgente/`, `procesados/revision_humana/`, `errores_tecnicos/`), vinculado al original por `documento_id`. Detalle en [docs/persistencia-resultados.md](docs/persistencia-resultados.md).
+- **Historial y trazabilidad:** cada corrida de procesamiento queda registrada como un evento nuevo en `historial/{documento_id}/`, que nunca se sobrescribe, para reconstruir la clasificación, extracción, confianza, routing y derivación a HITL de cada intento. Detalle en [docs/historial-triaje.md](docs/historial-triaje.md).
 
 ### Diagrama de arquitectura
 
@@ -37,7 +39,9 @@ La arquitectura está orquestada con LangGraph y combina dos agentes especializa
 - LangGraph — orquestación del flujo del agente
 - Pydantic — validación estructural de datos
 - Google Gemini — modelo LLM multimodal (clasificación y extracción)
-- OCI Object Storage — almacenamiento de documentos y resultados
+- Groq (`qwen/qwen3.8-27b`) — proveedor secundario para el fallback técnico del LLM
+- PyMuPDF — rasteriza PDF a imagen para el fallback de Groq
+- OCI Object Storage — almacenamiento de documentos originales, resultados por destino e historial de trazabilidad
 - Streamlit — interfaz de triaje
 
 ## Estructura del repositorio
@@ -60,7 +64,7 @@ G10-LATAM-EQUIPO-31/
 └── README.md
 ```
 
-`app/services/oci_storage_service.py` — servicio de conexión con OCI Object Storage: carga y recuperación de documentos originales (MF-04), y persistencia del resultado del flujo por estado (MF-13, ver [docs/persistencia-resultados.md](docs/persistencia-resultados.md)).
+`app/services/oci_storage_service.py` — servicio de conexión con OCI Object Storage: carga y recuperación de documentos originales (MF-04), persistencia del resultado del flujo por estado (MF-13, ver [docs/persistencia-resultados.md](docs/persistencia-resultados.md)), y registro del historial de trazabilidad por documento (MF-15, ver [docs/historial-triaje.md](docs/historial-triaje.md)).
 
 ## Configuración inicial del entorno
 
@@ -75,7 +79,7 @@ G10-LATAM-EQUIPO-31/
    ```
    pip install -r requirements.txt
    ```
-4. Copiar .env.example como .env y completar los valores reales (API keys de Gemini, credenciales de OCI):
+4. Copiar .env.example como .env y completar los valores reales (API keys de Gemini, credenciales de OCI, y opcionalmente la API key de Groq para el fallback técnico):
    ```
    cp .env.example .env
    ```
@@ -101,6 +105,13 @@ G10-LATAM-EQUIPO-31/
 | MF-07 Orquestación base LangGraph | Jennifer + Kimberlyn |
 | MF-08 Integración del flujo completo | Kimberlyn |
 | MF-16 Dataset/casos de prueba | Manuel / Kimberlyn |
+| MF-09 Validación de consistencia clínica | Tatiana / Tatiana + Kimberlyn |
+| MF-10 Evaluación de confianza | Duván / Jennifer |
+| MF-11 Evaluación de urgencia y routing | Jennifer |
+| MF-13 Persistencia de resultados en OCI | Katherine |
+| MF-15 Historial de triaje en OCI | Zahir / Katherine |
+| MF-19 Fallback técnico de LLM | Mauricio |
+| MF-20 Integración y validación Sprint 2 | Kimberlyn |
 
 ## Cierre del Sprint 1
 
@@ -115,3 +126,17 @@ El sistema recibe el documento a través del endpoint `POST /documentos`, lo cla
 - **Formatos probados:** TXT, PDF, PNG y JPG, incluyendo casos multimodales de imagen.
 - **Pruebas automatizadas:** 24/24 aprobadas sobre la rama `develop`.
 - **Evidencias:** el detalle de cada ejecución y las respuestas generadas se documentan en [docs/evidencias-sprint-1.md](docs/evidencias-sprint-1.md).
+
+## Cierre del Sprint 2
+
+Al cierre del Sprint 2 quedó integrado y validado el flujo completo de triaje, desde la ingesta hasta el registro de trazabilidad:
+
+**Flujo de procesamiento:** Ingesta → Clasificador → Extractor → Validación → Consistencia → Confianza → Routing → Persistencia → Historial
+
+El sistema, además de clasificar, extraer y validar (Sprint 1), ahora valida la consistencia clínica entre clasificación y extracción, calcula un score de confianza combinando la autoevaluación del modelo con reglas de completitud, y enruta cada documento a uno de tres destinos: `estandar`, `urgente` o `revision_humana`. El resultado se persiste en OCI Object Storage según su destino, y cada corrida queda además registrada en un historial de trazabilidad que nunca se sobrescribe. Si el proveedor principal del LLM (Gemini) falla por un problema técnico, el sistema reintenta automáticamente con un proveedor secundario (Groq) antes de marcar el documento como fallo técnico.
+
+- **Destinos de routing:** `estandar`, `urgente` y `revision_humana`, según la urgencia detectada y la categoría de confianza, con precedencia de la confianza sobre la urgencia.
+- **Persistencia y trazabilidad:** el resultado de cada documento se guarda en `procesados/{destino}/` u `errores_tecnicos/` (MF-13), y cada corrida queda registrada en `historial/{documento_id}/` en OCI Object Storage, sin pisar corridas anteriores (MF-15).
+- **Fallback técnico:** ante timeout, error 429/5xx o indisponibilidad del proveedor principal, el Clasificador y el Extractor reintentan con Groq (`qwen/qwen3.8-27b`) antes de fallar (MF-19).
+- **Pruebas automatizadas:** 175/175 aprobadas sobre la rama `develop`.
+- **Evidencias:** el detalle de cada escenario validado (estándar, urgente y revisión humana), con persistencia e historial verificados en OCI, se documenta en [docs/evidencias-sprint-2.md](docs/evidencias-sprint-2.md).
