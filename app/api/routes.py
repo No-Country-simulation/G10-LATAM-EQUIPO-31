@@ -329,16 +329,15 @@ async def recibir_documento(
         "validacion_ok": validacion_ok,
     }
 
-    # `proveedor_modelo`: MF-19 (todavía no integrado en develop) agrega al
-    # estado `metadata_clasificacion`/`metadata_extraccion`, cada uno con
-    # {proveedor_usado, modelo_usado, fallback_utilizado, intentos_principal,
-    # intentos_fallback} -- ver docs/historial-triaje.md. Se copian tal
-    # cual, por agente, mismo criterio que destino_principal: nunca se
-    # inventan. Si el estado no las trae (MF-19 sin integrar) o el
-    # Extractor se omitió (fallo total del Clasificador: nunca llega a
-    # correr, así que nunca genera metadata_extraccion), queda el mismo
-    # placeholder de siempre.
-    _METADATA_NO_DISPONIBLE = "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
+    # `proveedor_modelo`: MF-19 agrega al estado `metadata_clasificacion`/
+    # `metadata_extraccion`, cada uno con {proveedor_usado, modelo_usado,
+    # fallback_utilizado, intentos_principal, intentos_fallback} -- ver
+    # docs/historial-triaje.md. Se copian tal cual, por agente, mismo
+    # criterio que destino_principal: nunca se inventan. Si el estado no
+    # las trae -- el agente nunca llegó a correr (por ejemplo, fallo total
+    # del Clasificador: el Extractor se omite y nunca genera
+    # metadata_extraccion) -- queda el mismo placeholder de siempre.
+    _METADATA_NO_DISPONIBLE = "no_disponible (el agente no se ejecutó)"
     metadata_clasificacion = estado_completo.get("metadata_clasificacion") if estado_completo else None
     metadata_extraccion = estado_completo.get("metadata_extraccion") if estado_completo else None
 

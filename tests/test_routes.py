@@ -848,5 +848,5 @@ def test_post_documentos_clasificador_falla_total_no_hay_metadata_de_extractor(m
         "intentos_principal": 3, "intentos_fallback": 3,
     }
     assert evento["recorrido"]["proveedor_modelo"]["extractor"] == (
-        "no_disponible (pendiente de que MF-19 lo exponga en el estado)"
+        "no_disponible (el agente no se ejecutó)"
     )
