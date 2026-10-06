@@ -1,3 +1,4 @@
+import hashlib
 import logging
 from datetime import datetime, timezone
 
@@ -105,6 +106,10 @@ async def recibir_documento(
 ):
     # 1. Leer el archivo recibido
     contenido = await archivo.read()
+    # MF-22: huella del contenido ORIGINAL, antes de cualquier transformación
+    # (decodificar texto, subir a OCI, etc.) -- sobre los mismos bytes que ya
+    # quedaron en memoria por el `read()` de arriba, sin leer el archivo de nuevo.
+    huella_sha256 = hashlib.sha256(contenido).hexdigest()
 
     # 2. Preparar contenido según el tipo de archivo. Un tipo no soportado es
     #    un error del cliente (415), no un fallo técnico del flujo: se valida
@@ -260,6 +265,12 @@ async def recibir_documento(
         "nivel_urgencia": nivel_urgencia,
         "resultado": estado_completo,
         "error": error_persistido,
+        # MF-22: huella del contenido original (ver arriba). Va en el mismo
+        # envelope que ya se persiste en procesados/{estado}/ e historial/
+        # (paso 7b), así que un solo campo cubre los dos destinos y los tres
+        # casos de `estado` (incluido error_tecnico, por excepción o por
+        # fallos_tecnicos de MF-19).
+        "huella_sha256": huella_sha256,
     }
     # `urgente` (contrato de MF-11) se copia a nivel superior solo cuando el
     # estado lo trae, igual que nivel_urgencia, para filtrar sin desanidar.
