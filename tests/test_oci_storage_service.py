@@ -12,6 +12,7 @@ Ejecutar desde la raíz del repositorio:
 import json
 from datetime import datetime, timedelta, timezone
 
+import oci
 import pytest
 
 from app.services import oci_storage_service as service_module
@@ -35,13 +36,34 @@ class ObjectStorageClientFalso:
         self.config_recibida = config
         self._objetos = {}
 
-    def put_object(self, namespace_name, bucket_name, object_name, put_object_body):
-        self._objetos[(namespace_name, bucket_name, object_name)] = put_object_body
+    def put_object(
+        self, namespace_name, bucket_name, object_name, put_object_body, if_none_match=None
+    ):
+        clave = (namespace_name, bucket_name, object_name)
+        if if_none_match == "*" and clave in self._objetos:
+            raise oci.exceptions.ServiceError(
+                status=412,
+                code="IfNoneMatchFailed",
+                headers={},
+                message=f"El objeto {object_name!r} ya existe.",
+            )
+        self._objetos[clave] = put_object_body
 
     def get_object(self, namespace_name, bucket_name, object_name):
         clave = (namespace_name, bucket_name, object_name)
         contenido = self._objetos[clave]
         return RespuestaFalsa(contenido)
+
+    def list_objects(self, namespace_name, bucket_name, prefix=None, start=None):
+        prefijo = prefix or ""
+        nombres = sorted(
+            nombre
+            for (ns, bucket, nombre) in self._objetos
+            if ns == namespace_name and bucket == bucket_name and nombre.startswith(prefijo)
+        )
+        if start:
+            nombres = [nombre for nombre in nombres if nombre >= start]
+        return RespuestaListObjetosFalsa(nombres, next_start_with=None)
 
 
 class RespuestaFalsa:
@@ -52,6 +74,22 @@ class RespuestaFalsa:
 class DatosFalsos:
     def __init__(self, content: bytes):
         self.content = content
+
+
+class RespuestaListObjetosFalsa:
+    def __init__(self, nombres, next_start_with):
+        self.data = ListObjectsFalso(nombres, next_start_with)
+
+
+class ListObjectsFalso:
+    def __init__(self, nombres, next_start_with):
+        self.objects = [ObjectSummaryFalso(nombre) for nombre in nombres]
+        self.next_start_with = next_start_with
+
+
+class ObjectSummaryFalso:
+    def __init__(self, name):
+        self.name = name
 
 
 @pytest.fixture
@@ -301,3 +339,88 @@ def test_upload_historial_detecta_verificacion_fallida(service, monkeypatch):
 
     with pytest.raises(PersistenciaOCIError):
         service.upload_historial("DOC-2026-HIST006", MOMENTO_PRUEBA, {"x": 1})
+
+
+# --- MF-12: listar / leer_json / escribir_json_nuevo -----------------------
+
+
+def test_listar_devuelve_las_claves_bajo_el_prefijo(service):
+    service.upload_document("DOC-2026-LIST001", b"a", "informe.pdf")
+    service.upload_resultado("DOC-2026-LIST001", "estandar", {"x": 1})
+    service.upload_resultado("DOC-2026-LIST002", "urgente", {"x": 2})
+
+    claves = service.listar("procesados/")
+
+    assert sorted(claves) == [
+        "procesados/estandar/DOC-2026-LIST001.json",
+        "procesados/urgente/DOC-2026-LIST002.json",
+    ]
+
+
+def test_listar_carpeta_vacia_devuelve_lista_vacia(service):
+    assert service.listar("no/existe/") == []
+
+
+def test_listar_sigue_la_paginacion_de_oci(service, monkeypatch):
+    """ListObjects de OCI devuelve como máximo 1000 objetos por página;
+    listar() debe seguir `next_start_with` hasta que sea None."""
+
+    paginas = [
+        RespuestaListObjetosFalsa(["historial/DOC/a.json"], next_start_with="historial/DOC/b.json"),
+        RespuestaListObjetosFalsa(["historial/DOC/b.json"], next_start_with=None),
+    ]
+    llamadas = []
+
+    def list_objects_paginado(namespace_name, bucket_name, prefix=None, start=None):
+        llamadas.append(start)
+        return paginas[len(llamadas) - 1]
+
+    monkeypatch.setattr(service._client, "list_objects", list_objects_paginado)
+
+    claves = service.listar("historial/DOC/")
+
+    assert claves == ["historial/DOC/a.json", "historial/DOC/b.json"]
+    assert llamadas == [None, "historial/DOC/b.json"]
+
+
+def test_leer_json_caso_feliz(service):
+    datos = {"documento_id": "DOC-2026-LEER001", "x": 1}
+    service.escribir_json_nuevo("historial/DOC-2026-LEER001/evento.json", datos)
+
+    assert service.leer_json("historial/DOC-2026-LEER001/evento.json") == datos
+
+
+def test_leer_json_archivo_inexistente_lanza_error_claro(service):
+    with pytest.raises(PersistenciaOCIError):
+        service.leer_json("historial/no-existe/evento.json")
+
+
+def test_escribir_json_nuevo_caso_feliz(service):
+    clave = service.escribir_json_nuevo(
+        "historial/DOC-2026-ESCR001/evento.json", {"x": 1}
+    )
+
+    assert clave == "historial/DOC-2026-ESCR001/evento.json"
+    assert service.leer_json(clave) == {"x": 1}
+
+
+def test_escribir_json_nuevo_si_ya_existe_lanza_file_exists_error(service):
+    clave = "historial/DOC-2026-ESCR002/evento.json"
+    service.escribir_json_nuevo(clave, {"x": 1})
+
+    with pytest.raises(FileExistsError):
+        service.escribir_json_nuevo(clave, {"x": 2})
+
+    assert service.leer_json(clave) == {"x": 1}
+
+
+def test_escribir_json_nuevo_otro_error_de_oci_lanza_persistencia_error(service, monkeypatch):
+    def put_object_falla(*args, **kwargs):
+        raise oci.exceptions.ServiceError(
+            status=500, code="InternalError", headers={}, message="bucket no disponible"
+        )
+
+    monkeypatch.setattr(service._client, "put_object", put_object_falla)
+
+    with pytest.raises(PersistenciaOCIError):
+        service.escribir_json_nuevo("historial/DOC-2026-ESCR003/evento.json", {"x": 1})

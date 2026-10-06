@@ -205,3 +205,64 @@ class OCIStorageService:
         """
         contenido = self.get_document(object_name)
         return json.loads(contenido.decode("utf-8"))
+
+    def listar(self, prefijo: str) -> list:
+        """
+        Devuelve las claves (object_name) del bucket bajo `prefijo`.
+        ListObjects de OCI devuelve como máximo 1000 objetos por página;
+        este método sigue `next_start_with` hasta agotar la paginación.
+        """
+        claves = []
+        start = None
+        while True:
+            respuesta = self._client.list_objects(
+                namespace_name=self._namespace,
+                bucket_name=self._bucket_name,
+                prefix=prefijo,
+                start=start,
+            )
+            claves.extend(objeto.name for objeto in respuesta.data.objects)
+            start = respuesta.data.next_start_with
+            if not start:
+                break
+        return claves
+
+    def leer_json(self, clave: str) -> dict:
+        """Lee un objeto JSON del bucket por su clave y lo devuelve como dict."""
+        try:
+            contenido = self.get_document(clave)
+        except Exception as exc:
+            raise PersistenciaOCIError(
+                f"No se pudo leer el objeto {clave!r} de OCI: {exc}"
+            ) from exc
+        return json.loads(contenido.decode("utf-8"))
+
+    def escribir_json_nuevo(self, clave: str, datos: dict) -> str:
+        """
+        Guarda `datos` como JSON en `clave` sin sobrescribir un objeto
+        existente (if_none_match="*"). Si OCI responde 412 (la clave ya
+        existe), levanta FileExistsError. Cualquier otro error de OCI se
+        propaga como PersistenciaOCIError, igual que el resto del servicio.
+        """
+        contenido = json.dumps(datos, ensure_ascii=False, default=str).encode("utf-8")
+        try:
+            self._client.put_object(
+                namespace_name=self._namespace,
+                bucket_name=self._bucket_name,
+                object_name=clave,
+                put_object_body=contenido,
+                if_none_match="*",
+            )
+        except oci.exceptions.ServiceError as exc:
+            if exc.status == 412:
+                raise FileExistsError(
+                    f"El objeto {clave!r} ya existe en OCI (if_none_match)."
+                ) from exc
+            raise PersistenciaOCIError(
+                f"No se pudo guardar el objeto {clave!r} en OCI: {exc}"
+            ) from exc
+        except Exception as exc:
+            raise PersistenciaOCIError(
+                f"No se pudo guardar el objeto {clave!r} en OCI: {exc}"
+            ) from exc
+        return clave
