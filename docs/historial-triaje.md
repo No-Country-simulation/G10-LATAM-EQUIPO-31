@@ -171,9 +171,11 @@ Cada evento del envelope (tanto en `procesados/{estado}/` como en
 bytes **originales** del archivo recibido, calculado en `routes.py` justo
 después de leerlo (`archivo.read()`) y antes de cualquier transformación
 (decodificar texto, subir a OCI, etc.). Es la misma huella que usa la
-bandeja de Auditoría Humana propuesta por Mauricio (`CAMPO_HUELLA =
-"huella_sha256"` en `app/services/auditoria_eventos.py`) para decidir si
-un reenvío es el mismo archivo que uno ya rechazado.
+bandeja de Auditoría Humana (MF-12, de Mauricio) en `CAMPO_HUELLA =
+"huella_sha256"` (`app/services/auditoria_eventos.py`): si el evento
+sobre el que se decide ya trae la huella, la decisión la **COPIA** para
+trazabilidad, pero no la usa para decidir nada (no compara reenvíos con
+ella).
 
 Dos puntos a tener en cuenta:
 
