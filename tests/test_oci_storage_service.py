@@ -35,9 +35,22 @@ class ObjectStorageClientFalso:
     def __init__(self, config):
         self.config_recibida = config
         self._objetos = {}
+        self._content_types = {}
+        self._fechas = {}
+
+    def fijar_fechas(self, namespace_name, bucket_name, object_name, time_created=None, time_modified=None):
+        """Ayuda de test: asigna timeCreated/timeModified a un objeto ya subido."""
+        clave = (namespace_name, bucket_name, object_name)
+        self._fechas[clave] = (time_created, time_modified)
 
     def put_object(
-        self, namespace_name, bucket_name, object_name, put_object_body, if_none_match=None
+        self,
+        namespace_name,
+        bucket_name,
+        object_name,
+        put_object_body,
+        if_none_match=None,
+        content_type=None,
     ):
         clave = (namespace_name, bucket_name, object_name)
         if if_none_match == "*" and clave in self._objetos:
@@ -48,13 +61,15 @@ class ObjectStorageClientFalso:
                 message=f"El objeto {object_name!r} ya existe.",
             )
         self._objetos[clave] = put_object_body
+        self._content_types[clave] = content_type
+        self._fechas.setdefault(clave, (None, None))
 
     def get_object(self, namespace_name, bucket_name, object_name):
         clave = (namespace_name, bucket_name, object_name)
         contenido = self._objetos[clave]
         return RespuestaFalsa(contenido)
 
-    def list_objects(self, namespace_name, bucket_name, prefix=None, start=None):
+    def list_objects(self, namespace_name, bucket_name, prefix=None, fields=None, start=None):
         prefijo = prefix or ""
         nombres = sorted(
             nombre
@@ -63,7 +78,14 @@ class ObjectStorageClientFalso:
         )
         if start:
             nombres = [nombre for nombre in nombres if nombre >= start]
-        return RespuestaListObjetosFalsa(nombres, next_start_with=None)
+        objetos = []
+        for nombre in nombres:
+            clave = (namespace_name, bucket_name, nombre)
+            time_created, time_modified = self._fechas.get(clave, (None, None))
+            objetos.append(
+                ObjectSummaryFalso(nombre, time_created=time_created, time_modified=time_modified)
+            )
+        return RespuestaListObjetosFalsa(objetos, next_start_with=None)
 
 
 class RespuestaFalsa:
@@ -77,19 +99,21 @@ class DatosFalsos:
 
 
 class RespuestaListObjetosFalsa:
-    def __init__(self, nombres, next_start_with):
-        self.data = ListObjectsFalso(nombres, next_start_with)
+    def __init__(self, objetos, next_start_with):
+        self.data = ListObjectsFalso(objetos, next_start_with)
 
 
 class ListObjectsFalso:
-    def __init__(self, nombres, next_start_with):
-        self.objects = [ObjectSummaryFalso(nombre) for nombre in nombres]
+    def __init__(self, objetos, next_start_with):
+        self.objects = objetos
         self.next_start_with = next_start_with
 
 
 class ObjectSummaryFalso:
-    def __init__(self, name):
+    def __init__(self, name, time_created=None, time_modified=None):
         self.name = name
+        self.time_created = time_created
+        self.time_modified = time_modified
 
 
 @pytest.fixture
@@ -344,42 +368,108 @@ def test_upload_historial_detecta_verificacion_fallida(service, monkeypatch):
 # --- MF-12: listar / leer_json / escribir_json_nuevo -----------------------
 
 
-def test_listar_devuelve_las_claves_bajo_el_prefijo(service):
+def test_listar_devuelve_nombre_y_fecha_bajo_el_prefijo(service):
     service.upload_document("DOC-2026-LIST001", b"a", "informe.pdf")
     service.upload_resultado("DOC-2026-LIST001", "estandar", {"x": 1})
     service.upload_resultado("DOC-2026-LIST002", "urgente", {"x": 2})
 
-    claves = service.listar("procesados/")
-
-    assert sorted(claves) == [
+    creado_1 = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    modificado_1 = datetime(2026, 1, 2, tzinfo=timezone.utc)
+    creado_2 = datetime(2026, 1, 3, tzinfo=timezone.utc)
+    service._client.fijar_fechas(
+        "fake-namespace",
+        "documentos-clinicos",
         "procesados/estandar/DOC-2026-LIST001.json",
+        time_created=creado_1,
+        time_modified=modificado_1,
+    )
+    service._client.fijar_fechas(
+        "fake-namespace",
+        "documentos-clinicos",
         "procesados/urgente/DOC-2026-LIST002.json",
+        time_created=creado_2,
+        time_modified=None,
+    )
+
+    objetos = service.listar("procesados/")
+
+    assert sorted(objetos) == [
+        ("procesados/estandar/DOC-2026-LIST001.json", modificado_1),
+        ("procesados/urgente/DOC-2026-LIST002.json", creado_2),
     ]
+
+
+def test_listar_usa_time_created_si_no_hay_time_modified(service):
+    """Si el objeto no tiene timeModified (p.ej. nunca se sobrescribió),
+    listar() debe devolver timeCreated en su lugar."""
+
+    service.upload_resultado("DOC-2026-LIST003", "estandar", {"x": 1})
+    creado = datetime(2026, 2, 1, tzinfo=timezone.utc)
+    service._client.fijar_fechas(
+        "fake-namespace",
+        "documentos-clinicos",
+        "procesados/estandar/DOC-2026-LIST003.json",
+        time_created=creado,
+        time_modified=None,
+    )
+
+    objetos = service.listar("procesados/estandar/")
+
+    assert objetos == [("procesados/estandar/DOC-2026-LIST003.json", creado)]
 
 
 def test_listar_carpeta_vacia_devuelve_lista_vacia(service):
     assert service.listar("no/existe/") == []
 
 
+def test_listar_pasa_fields_a_list_objects(service, monkeypatch):
+    """listar() debe pedir explícitamente timeCreated/timeModified, ya que
+    OCI por defecto solo devuelve el nombre del objeto."""
+
+    llamadas = []
+    original_list_objects = service._client.list_objects
+
+    def list_objects_espia(*args, **kwargs):
+        llamadas.append(kwargs.get("fields"))
+        return original_list_objects(*args, **kwargs)
+
+    monkeypatch.setattr(service._client, "list_objects", list_objects_espia)
+
+    service.listar("no/existe/")
+
+    assert llamadas == ["name,timeCreated,timeModified"]
+
+
 def test_listar_sigue_la_paginacion_de_oci(service, monkeypatch):
     """ListObjects de OCI devuelve como máximo 1000 objetos por página;
     listar() debe seguir `next_start_with` hasta que sea None."""
 
+    fecha_a = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    fecha_b = datetime(2026, 3, 2, tzinfo=timezone.utc)
     paginas = [
-        RespuestaListObjetosFalsa(["historial/DOC/a.json"], next_start_with="historial/DOC/b.json"),
-        RespuestaListObjetosFalsa(["historial/DOC/b.json"], next_start_with=None),
+        RespuestaListObjetosFalsa(
+            [ObjectSummaryFalso("historial/DOC/a.json", time_modified=fecha_a)],
+            next_start_with="historial/DOC/b.json",
+        ),
+        RespuestaListObjetosFalsa(
+            [ObjectSummaryFalso("historial/DOC/b.json", time_modified=fecha_b)],
+            next_start_with=None,
+        ),
     ]
     llamadas = []
 
-    def list_objects_paginado(namespace_name, bucket_name, prefix=None, start=None):
+    def list_objects_paginado(namespace_name, bucket_name, prefix=None, fields=None, start=None):
         llamadas.append(start)
         return paginas[len(llamadas) - 1]
 
     monkeypatch.setattr(service._client, "list_objects", list_objects_paginado)
 
-    claves = service.listar("historial/DOC/")
+    objetos = service.listar("historial/DOC/")
 
-    assert claves == ["historial/DOC/a.json", "historial/DOC/b.json"]
+    assert objetos == [
+        ("historial/DOC/a.json", fecha_a),
+        ("historial/DOC/b.json", fecha_b),
+    ]
     assert llamadas == [None, "historial/DOC/b.json"]
 
 
@@ -402,6 +492,16 @@ def test_escribir_json_nuevo_caso_feliz(service):
 
     assert clave == "historial/DOC-2026-ESCR001/evento.json"
     assert service.leer_json(clave) == {"x": 1}
+
+
+def test_escribir_json_nuevo_usa_content_type_json(service):
+    clave = service.escribir_json_nuevo(
+        "historial/DOC-2026-ESCR004/evento.json", {"x": 1}
+    )
+
+    assert service._client._content_types[
+        ("fake-namespace", "documentos-clinicos", clave)
+    ] == "application/json"
 
 
 def test_escribir_json_nuevo_si_ya_existe_lanza_file_exists_error(service):

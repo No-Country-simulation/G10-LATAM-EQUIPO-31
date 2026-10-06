@@ -206,26 +206,32 @@ class OCIStorageService:
         contenido = self.get_document(object_name)
         return json.loads(contenido.decode("utf-8"))
 
-    def listar(self, prefijo: str) -> list:
+    def listar(self, prefijo: str) -> list[tuple[str, datetime | None]]:
         """
-        Devuelve las claves (object_name) del bucket bajo `prefijo`.
-        ListObjects de OCI devuelve como máximo 1000 objetos por página;
-        este método sigue `next_start_with` hasta agotar la paginación.
+        Devuelve, para cada objeto del bucket bajo `prefijo`, una tupla
+        (object_name, fecha) donde `fecha` es `time_modified` o, si no
+        está disponible, `time_created`. ListObjects de OCI devuelve
+        como máximo 1000 objetos por página; este método sigue
+        `next_start_with` hasta agotar la paginación.
         """
-        claves = []
+        objetos = []
         start = None
         while True:
             respuesta = self._client.list_objects(
                 namespace_name=self._namespace,
                 bucket_name=self._bucket_name,
                 prefix=prefijo,
+                fields="name,timeCreated,timeModified",
                 start=start,
             )
-            claves.extend(objeto.name for objeto in respuesta.data.objects)
+            objetos.extend(
+                (objeto.name, objeto.time_modified or objeto.time_created)
+                for objeto in respuesta.data.objects
+            )
             start = respuesta.data.next_start_with
             if not start:
                 break
-        return claves
+        return objetos
 
     def leer_json(self, clave: str) -> dict:
         """Lee un objeto JSON del bucket por su clave y lo devuelve como dict."""
@@ -252,6 +258,7 @@ class OCIStorageService:
                 object_name=clave,
                 put_object_body=contenido,
                 if_none_match="*",
+                content_type="application/json",
             )
         except oci.exceptions.ServiceError as exc:
             if exc.status == 412:
