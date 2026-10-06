@@ -29,6 +29,7 @@ oci==2.186.0
 
 # HTTP
 httpx==0.28.1
+requests  # MF-12: cliente HTTP del panel HITL (frontend/)
 
 # Testing
 pytest==8.3.4
