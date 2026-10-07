@@ -164,6 +164,40 @@ el Clasificador falla del todo, el Extractor nunca llega a correr
 `proveedor_usado`/`modelo_usado` en `None`, pero `fallback_utilizado:
 true` si llegó a intentarlo).
 
+## Huella del contenido (MF-22)
+
+Cada evento del envelope (tanto en `procesados/{estado}/` como en
+`historial/`) suma un campo más: `huella_sha256`, el SHA-256 (hex) de los
+bytes **originales** del archivo recibido, calculado en `routes.py` justo
+después de leerlo (`archivo.read()`) y antes de cualquier transformación
+(decodificar texto, subir a OCI, etc.). Es la misma huella que usa la
+bandeja de Auditoría Humana (MF-12, de Mauricio) en `CAMPO_HUELLA =
+"huella_sha256"` (`app/services/auditoria_eventos.py`): si el evento
+sobre el que se decide ya trae la huella, la decisión la **COPIA** para
+trazabilidad, pero no la usa para decidir nada (no compara reenvíos con
+ella).
+
+Dos puntos a tener en cuenta:
+
+- **Está presente en los tres casos de `estado`** (éxito, excepción real
+  del grafo y `fallos_tecnicos` de MF-19 sin excepción), porque se calcula
+  en el paso 1, antes de que el grafo corra o falle, y el mismo `envelope`
+  es la base tanto del resultado como del evento de historial. Pero si
+  falla la subida del documento original a OCI (paso 3), la API responde
+  503 ahí mismo, sin llegar a construir el `envelope` ni a escribir nada
+  en `procesados/` ni en `historial/` — en ese caso no queda evento ni
+  huella (no hay nada guardado con qué comparar).
+- **Eventos guardados ANTES de este cambio no la tienen.** Quien lea el
+  historial debe tratar su ausencia como "no se puede comparar" (no como
+  `False` ni como un archivo distinto) — es el criterio que ya aplica
+  `auditoria_eventos.py` con `evento.get(CAMPO_HUELLA)`.
+
+Por ahora esto es solo el campo en el envelope (puntos 1 y 2 del diseño en
+`diseno-huella-mf15.md`): la guardia de `POST /documentos` que evita
+reprocesar un reenvío idéntico, y los métodos nuevos de `OCIStorageService`
+que reemplazarían al adaptador `almacen_oci.py`, quedan fuera de este
+cambio.
+
 ## Reutiliza el servicio de OCI de MF-13
 
 `OCIStorageService` (MF-04/MF-13) suma dos métodos, mismo patrón que
