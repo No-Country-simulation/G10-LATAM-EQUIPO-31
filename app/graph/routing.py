@@ -1,21 +1,18 @@
 """
 app/graph/routing.py
 
-Nodo de Urgencia y Routing — MF-11.
-
 Decide el destino final de cada documento, combinando:
 - La urgencia clínica (dos señales que hay que reconciliar, ver abajo).
 - La categoría de confianza calculada en MF-10 (evaluacion_confianza).
-
-OPCIÓN B (aprobada en Sprint Planning): alineación con los departamentos
-que menciona el brief original (Cola de Urgencias Médicas, Auditoría de
-Autorizaciones, Farmacia Hospitalaria, Historia Clínica Electrónica) SIN
-tocar el contrato de destino_principal ya probado. destino_principal
-sigue siendo exactamente "estandar" | "urgente" | "revision_humana",
-igual que en develop. Se agrega un campo NUEVO y adicional,
-departamento_destino, calculado solo cuando destino_principal ==
-"estandar", según el tipo de documento (MF-05).
-
+ 
+Alineación con los departamentos que menciona el brief original 
+(Cola de Urgencias Médicas, Auditoría de Autorizaciones, Farmacia 
+Hospitalaria, Historia Clínica Electrónica) SIN tocar el contrato de 
+destino_principal ya probado. destino_principal sigue siendo exactamente 
+"estandar" | "urgente" | "revision_humana", igual que en develop. 
+Se agrega un campo NUEVO y adicional, departamento_destino, calculado 
+solo cuando destino_principal == "estandar", según el tipo de documento (MF-05).
+ 
 Contrato de salida (destino_principal/requiere_auditoria_humana/urgente/
 justificacion_enrutamiento sin cambios respecto a la versión aprobada):
     destino_principal: "estandar" | "urgente" | "revision_humana"
@@ -23,13 +20,18 @@ justificacion_enrutamiento sin cambios respecto a la versión aprobada):
     requiere_auditoria_humana: bool
     urgente: bool -> señal reconciliada, independiente de la ruta final
     justificacion_enrutamiento: str
-    departamento_destino: str (NUEVO, opcional)
-        -> presente solo si destino_principal == "estandar" y el tipo de
-           documento tiene departamento conocido. Katherine puede usarlo
-           para una subcarpeta opcional: procesados/estandar/{departamento_destino}/
-           AUSENTE en cualquier otro caso (urgente, revision_humana, o
-           tipo de documento sin departamento mapeado) -> usar .get().
-
+    departamento_destino: str (NUEVO, opcional) -- MF-23
+        -> presente cuando destino_principal == "estandar" Y el tipo de
+           documento tiene departamento conocido (mapeo por tipo).
+        -> presente SIEMPRE que destino_principal == "urgente", con el
+           valor fijo "cola_urgencias_medicas", sin importar el tipo de
+           documento (la urgencia no depende del tipo).
+        -> AUSENTE cuando destino_principal == "revision_humana" (fuera
+           de alcance de MF-23; a evaluar como mejora de seguimiento) o
+           cuando el tipo de documento no tiene departamento mapeado en
+           la rama estándar (no se infiere un departamento a ciegas).
+           Usar .get() al leer.
+ 
 RECONCILIACIÓN DE LAS DOS SEÑALES DE URGENCIA (sin cambios):
 El Clasificador (MF-05) reporta clasificacion.nivel_prioridad (texto
 libre: "Urgente" | "Rutina" | "Normal"). El Extractor (MF-06) reporta,
@@ -37,19 +39,19 @@ por separado, extraccion.nivel_urgencia (enum: no_urgente | prioritario |
 urgente | emergencia). Pueden discrepar. Se adopta un criterio
 conservador: si CUALQUIERA de las dos señales indica urgencia, el
 documento se considera urgente.
-
+ 
 REGLA DE PRECEDENCIA (sin cambios, obligatoria según el Plan v0.2):
 La categoría de confianza manda sobre la urgencia para decidir la RUTA:
 un documento urgente con confianza Media o Baja NO va a la cola de
-emergencia sin revisar va a revisión humana, pero CONSERVANDO la señal
+emergencia sin revisar — va a revisión humana, pero CONSERVANDO la señal
 de urgencia (campo `urgente`).
-
-MAPA DE DEPARTAMENTO (solo para destino_principal == "estandar"):
-la urgencia es independiente del tipo de documento por eso el
-departamento NUNCA se calcula para la rama "urgente" (todo urgente va a
-la misma cola de emergencia, sin importar el tipo), ni para
-"revision_humana" (un caso dudoso no tiene un departamento claro todavía
-hasta que se resuelva). Solo tiene sentido en la rama estándar.
+ 
+MAPA DE DEPARTAMENTO POR TIPO (solo aplica a la rama "estandar"):
+en la rama "urgente", departamento_destino es siempre el valor fijo
+"cola_urgencias_medicas" -- no usa este mapa, porque la urgencia es
+independiente del tipo de documento (todo urgente va a la misma cola,
+sin importar el tipo). En "revision_humana", departamento_destino queda
+ausente por ahora (fuera de alcance de MF-23).
 """
 from app.schemas.state import MediFlowState
 from app.schemas.clasificacion import DocumentType
@@ -115,6 +117,7 @@ def nodo_routing_condicional(state: MediFlowState) -> dict:
             "destino_principal": "urgente",
             "requiere_auditoria_humana": False,
             "urgente": urgente,
+            "departamento_destino": "cola_urgencias_medicas",
             "justificacion_enrutamiento": "Confianza Alta y urgencia detectada: ruta a cola de emergencia.",
         }
     else:
