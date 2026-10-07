@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "tipo_evento": "decision_humana",
+  "documento_id": "MF12-EVID-RECHAZAR",
+  "decision": "RECHAZADO",
+  "notas": "Rechazado como evidencia de MF-12: datos inconsistentes (receta con estudios)",
+  "auditor": "katherine.s",
+  "timestamp": "2026-10-07T06:03:11.478866+00:00",
+  "tipo_documento": "Receta Medica",
+  "nivel_urgencia": "no_urgente",
+  "urgente": false,
+  "categoria_confianza": "Media",
+  "evento_referencia": "historial/MF12-EVID-RECHAZAR/20261007T055709033550.json",
+  "huella_sha256": "93bdb8c57dd3dea2b17641e796073dc6d2296fdc600c49e7100476faf8cf73c9",
+  "motivo": "INCONSISTENTE"
+}

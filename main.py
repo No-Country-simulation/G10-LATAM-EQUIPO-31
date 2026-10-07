@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.api.routes import router
+from app.api.rutas_auditoria import router as router_auditoria
 
 
 app = FastAPI(
@@ -10,3 +11,4 @@ app = FastAPI(
 )
 
 app.include_router(router)
+app.include_router(router_auditoria)

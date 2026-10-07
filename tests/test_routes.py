@@ -6,6 +6,7 @@ resultado en OCI (MF-13). Los agentes del grafo y el servicio de OCI se
 mockean/reemplazan para no depender de Gemini ni de credenciales reales,
 siguiendo el mismo patrón que tests/test_graph.py.
 """
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -750,3 +751,118 @@ def test_post_documentos_clasificador_falla_total_no_hay_metadata_de_extractor(m
     assert evento["recorrido"]["proveedor_modelo"]["extractor"] == (
         "no_disponible (el agente no se ejecutó)"
     )
+
+
+
+# --------------------------------------------------------------------------
+# MF-22: huella SHA-256 del contenido original (CAMPO_HUELLA = "huella_sha256",
+# propuesto por Mauricio para MF-15 -- ver docs/historial-triaje.md).
+# --------------------------------------------------------------------------
+def test_post_documentos_huella_sha256_mismo_contenido_misma_huella(monkeypatch):
+    """La huella depende solo del contenido -- enviar el mismo archivo con
+    otro documento_id y otro nombre de archivo debe dar la misma huella."""
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+    contenido = (SAMPLES_DIR / "01_receta_medica.txt").read_bytes()
+    esperada = hashlib.sha256(contenido).hexdigest()
+
+    client.post(
+        "/documentos",
+        data={"documento_id": "DOC-HUELLA-A", "canal_origen": "test"},
+        files={"archivo": ("01_receta_medica.txt", contenido, "text/plain")},
+    )
+    client.post(
+        "/documentos",
+        data={"documento_id": "DOC-HUELLA-B", "canal_origen": "test"},
+        files={"archivo": ("copia_con_otro_nombre.txt", contenido, "text/plain")},
+    )
+
+    huellas = {doc_id: resultado["huella_sha256"] for doc_id, _, resultado in fake_storage.resultados_subidos}
+    assert huellas["DOC-HUELLA-A"] == esperada
+    assert huellas["DOC-HUELLA-B"] == esperada
+
+
+def test_post_documentos_huella_sha256_contenido_distinto_huella_distinta(monkeypatch):
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+
+    _enviar_documento(client, documento_id="DOC-HUELLA-C", filename="01_receta_medica.txt")
+    _enviar_documento(client, documento_id="DOC-HUELLA-D", filename="02_informe_estudio.txt")
+
+    huellas = {doc_id: resultado["huella_sha256"] for doc_id, _, resultado in fake_storage.resultados_subidos}
+    assert huellas["DOC-HUELLA-C"] != huellas["DOC-HUELLA-D"]
+    assert huellas["DOC-HUELLA-C"] == hashlib.sha256(
+        (SAMPLES_DIR / "01_receta_medica.txt").read_bytes()
+    ).hexdigest()
+    assert huellas["DOC-HUELLA-D"] == hashlib.sha256(
+        (SAMPLES_DIR / "02_informe_estudio.txt").read_bytes()
+    ).hexdigest()
+
+
+def test_post_documentos_huella_sha256_presente_en_exito(monkeypatch):
+    """Caso 1/3: éxito -- la huella queda en procesados/ y en historial/."""
+    _configurar_agentes_mock(monkeypatch)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+    esperada = hashlib.sha256((SAMPLES_DIR / "01_receta_medica.txt").read_bytes()).hexdigest()
+
+    response = _enviar_documento(client, documento_id="DOC-HUELLA-EXITO")
+
+    assert response.status_code == 200
+    _, estado, resultado = fake_storage.resultados_subidos[0]
+    assert estado == "estandar"
+    assert resultado["huella_sha256"] == esperada
+    _, _, evento_historial = fake_storage.historial_subido[0]
+    assert evento_historial["huella_sha256"] == esperada
+
+
+def test_post_documentos_huella_sha256_presente_en_excepcion_del_grafo(monkeypatch):
+    """Caso 2/3: excepción real del grafo -- la huella ya se calculó en el
+    paso 1 (antes de correr el grafo), así que sigue presente aunque el
+    procesamiento falle del todo."""
+
+    def clasificar_que_falla(_documento, **_kwargs):
+        raise RuntimeError("El proveedor Gemini no respondió (fallo técnico simulado)")
+
+    _configurar_agentes_mock(monkeypatch, clasificar=clasificar_que_falla)
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+    esperada = hashlib.sha256((SAMPLES_DIR / "01_receta_medica.txt").read_bytes()).hexdigest()
+
+    response = _enviar_documento(client, documento_id="DOC-HUELLA-EXCEPCION")
+
+    assert response.status_code == 500
+    _, estado, resultado = fake_storage.resultados_subidos[0]
+    assert estado == "error_tecnico"
+    assert resultado["huella_sha256"] == esperada
+    _, _, evento_historial = fake_storage.historial_subido[0]
+    assert evento_historial["huella_sha256"] == esperada
+
+
+def test_post_documentos_huella_sha256_presente_en_fallos_tecnicos_de_mf19(monkeypatch):
+    """Caso 3/3: fallos_tecnicos (MF-19) sin excepción real -- también va a
+    error_tecnico, y también debe llevar la huella."""
+    monkeypatch.setattr(
+        routes,
+        "grafo_mediflow",
+        GrafoFalso({
+            "destino_principal": "estandar",
+            "fallos_tecnicos": [
+                {"nodo": "extraccion", "error": "timeout llamando al proveedor Gemini"},
+            ],
+        }),
+    )
+    fake_storage = FakeOCIStorageService()
+    client = _crear_client(monkeypatch, fake_storage)
+    esperada = hashlib.sha256((SAMPLES_DIR / "01_receta_medica.txt").read_bytes()).hexdigest()
+
+    response = _enviar_documento(client, documento_id="DOC-HUELLA-FALLOSTECNICOS")
+
+    assert response.status_code == 500
+    _, estado, resultado = fake_storage.resultados_subidos[0]
+    assert estado == "error_tecnico"
+    assert resultado["huella_sha256"] == esperada
+    _, _, evento_historial = fake_storage.historial_subido[0]
+    assert evento_historial["huella_sha256"] == esperada
