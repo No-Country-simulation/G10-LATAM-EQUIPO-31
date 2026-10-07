@@ -88,3 +88,11 @@ class MediFlowState(TypedDict, total=False):
     requiere_auditoria_humana: bool
     urgente: bool  # señal reconciliada; True incluso si destino_principal == "revision_humana"
     justificacion_enrutamiento: str
+
+    # Departamento de destino (adicional, no reemplaza nada) ---
+    # Solo presente cuando destino_principal == "estandar" y el tipo de
+    # documento tiene un departamento conocido (ver MAPA_DESTINO_POR_TIPO
+    # en routing.py). Katherine (MF-13) puede usarlo para una subcarpeta
+    # opcional: procesados/estandar/{departamento_destino}/
+    # AUSENTE en el resto de los casos -> usar .get() al leer.
+    departamento_destino: str

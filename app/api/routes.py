@@ -218,8 +218,13 @@ async def recibir_documento(
     #    puede asumir que ninguno de los dos exista.
     estado_completo = _serializar_estado_grafo(resultado) if resultado is not None else None
 
+    departamento_destino = (
+        estado_completo.get("departamento_destino") if estado_completo else None
+    )
+    
     if estado_completo is not None:
         extraccion = estado_completo.get("extraccion")
+        
         cuerpo_resultado = {
             "clasificacion": estado_completo.get("clasificacion"),
             "extraccion": extraccion,
@@ -227,8 +232,10 @@ async def recibir_documento(
                 "validacion_ok": estado_completo.get("validacion_ok"),
                 "errores_validacion": estado_completo.get("errores_validacion"),
             },
+            "departamento_destino": departamento_destino,
         }
         nivel_urgencia = extraccion.get("nivel_urgencia") if extraccion else None
+        
     else:
         cuerpo_resultado = {}
         nivel_urgencia = None
@@ -276,6 +283,8 @@ async def recibir_documento(
     # estado lo trae, igual que nivel_urgencia, para filtrar sin desanidar.
     if estado_completo is not None and "urgente" in estado_completo:
         envelope["urgente"] = estado_completo["urgente"]
+    if estado_completo is not None and "departamento_destino" in estado_completo:
+        envelope["departamento_destino"] = estado_completo["departamento_destino"]
 
     try:
         oci_object_name_resultado = storage.upload_resultado(
@@ -334,6 +343,7 @@ async def recibir_documento(
             estado_completo.get("categoria_confianza") if estado_completo else None
         ),
         "destino_principal": destino_principal,
+        "departamento_destino": departamento_destino,
         "requiere_auditoria_humana": (
             estado_completo.get("requiere_auditoria_humana") if estado_completo else None
         ),
@@ -399,7 +409,7 @@ async def recibir_documento(
             else "Documento procesado correctamente por MediFlow"
         ),
     }
-
+    
     if es_error_tecnico:
         return JSONResponse(status_code=500, content=respuesta)
 
