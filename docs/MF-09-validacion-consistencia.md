@@ -17,7 +17,6 @@ def nodo_validacion_consistencia(state: MediFlowState) -> dict:
     return {
         "inconsistencias": resultado["inconsistencias"]
     }
-Usa el código con precaución.
 3. Estructura y Manejo de Inconsistencias
 El componente evalúa la información del documento clínico e identifica datos faltantes, inválidos o lógicas contradictorias que afecten el flujo de negocio. Cuando encuentra anomalías, genera un resultado estructurado que se inyecta en el estado para que MF-10 pueda aplicar penalizaciones diferenciadas.
 La salida estructurada sigue el formato de la clave extraída en el retorno del nodo:
@@ -31,8 +30,7 @@ json
     }
   ]
 }
-Usa el código con precaución.
 4. Pruebas e Integración (E2E)
 • Casos Estándar y Válidos: Documentos clínicos procesados correctamente que transicionan de nodo_validacion_pydantic a consistencia sin registrar penalizaciones en el estado.
 • Casos Inconsistentes / Datos Faltantes: Simulación de payloads con inconsistencias clínicas para verificar que el estado capture el arreglo de errores, permitiendo que la lógica de confianza (confianza.py) aplique los descuentos correspondientes (-0.05 para secundarios y -0.10 para críticos).
-• Validación en el Grafo: Se verificó la correcta declaración de builder.add_node("consistencia", nodo_validacion_consistencia) asegurando la estabilidad total de la suite de pruebas del Sprint 2 de integración.
+• Validación en el Grafo: Se verificó la correcta declaración de builder.add_node("consistencia", nodo_validacion_consistencia) Se verificó la integración del nodo mediante la suite de pruebas correspondiente.

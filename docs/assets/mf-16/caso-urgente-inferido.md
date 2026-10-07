@@ -1,4 +1,4 @@
-# Reporte Clínico de Emergencia - ID: INF-01
+# Reporte Clínico - ID: INF-01
 
 ## Datos del Paciente
 - Edad: 62 años
@@ -14,4 +14,4 @@ Paciente ingresa refiriendo dolor torácico opresivo de intensidad 8/10 irradiad
 - Saturación de Oxígeno (SpO2): 84% con aire ambiente (Hipoxemia severa)
 
 ## Notas Médicas
-El cuadro clínico y los signos vitales sugieren un posible Síndrome Coronario Agudo (Infarto) en evolución. Requiere atención inmediata en sala de reanimación.
+El cuadro clínico y los signos vitales sugieren un posible Síndrome Coronario Agudo (Infarto) en evolución combinada con insuficiencia respiratoria. Se traslada a cubículo de evaluación crítica para toma de electrocardiograma de 12 derivaciones.
