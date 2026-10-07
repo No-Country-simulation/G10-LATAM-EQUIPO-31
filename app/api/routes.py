@@ -2,7 +2,7 @@ import hashlib
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -13,6 +13,7 @@ from app.services.oci_storage_service import (
     PersistenciaOCIError,
 )
 from app.graph.graph import grafo_mediflow
+from app.services.alertas_n8n import emitir_alerta_si_corresponde
 from app.schemas.documento import DocumentoEntrada
 
 logger = logging.getLogger("mediflow.app.api.routes")
@@ -100,6 +101,7 @@ def determinar_estado(
 
 @router.post("/documentos")
 async def recibir_documento(
+    background_tasks: BackgroundTasks,
     documento_id: str = Form(...),
     canal_origen: str = Form(...),
     archivo: UploadFile = File(...)
@@ -400,7 +402,16 @@ async def recibir_documento(
         ),
     }
 
+    # 9. Alerta de caso urgente (MF-14): se agenda como tarea en segundo
+    #    plano, DESPUÉS de persistir resultado e historial. Corre una vez
+    #    enviada la respuesta y no propaga excepciones (ver
+    #    app/services/alertas_n8n.py), así que una falla de n8n, Slack o
+    #    correo nunca afecta el procesamiento ni la persistencia.
+    background_tasks.add_task(emitir_alerta_si_corresponde, envelope, estado_completo)
+
     if es_error_tecnico:
-        return JSONResponse(status_code=500, content=respuesta)
+        return JSONResponse(
+            status_code=500, content=respuesta, background=background_tasks
+        )
 
     return respuesta
