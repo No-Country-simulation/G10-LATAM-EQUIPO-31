@@ -1,4 +1,4 @@
-# MF-12 — Mecanismo HITL y panel de revisión humana
+﻿# MF-12 — Mecanismo HITL y panel de revisión humana
 
 Rama: `feature/MF-12-hitl-review` · Base: `develop` (`38e8bcc`) · Apoyo de persistencia/OCI: Kate (MF-13 / MF-15 / MF-22)
 
@@ -118,7 +118,7 @@ El panel previo se reutilizó solo en lo necesario:
 3. **Documento original:** el panel muestra la extracción y los metadatos, pero no el archivo original (`recibidos/`); no existe un endpoint que lo sirva.
 4. **Persistencia OCI:** la bandeja y las decisiones usan `OCIStorageService.listar`, `leer_json` y `escribir_json_nuevo` (PR #47, apoyo de Kate). Esos métodos se probaron contra el bucket real en una clave temporal de `pruebas/`: no sobrescriben (412 → `FileExistsError`) y `listar` devuelve fechas reales.
 5. **Caché del panel:** la bandeja se cachea 30 s; «Actualizar bandeja» fuerza la lectura.
-6. **Flujo HITL aún sin prueba contra OCI real:** las pruebas automáticas usan el `OCIStorageService` real sobre un cliente OCI simulado; las evidencias de APROBAR y RECHAZAR (§11) deben salir del bucket real.
+6. **Flujo HITL validado contra OCI real:** las pruebas automáticas usan el `OCIStorageService` real sobre un cliente OCI simulado, y las evidencias de APROBAR y RECHAZAR (§11) se generaron contra el bucket real.
 
 ## 9. Pruebas
 
@@ -143,16 +143,20 @@ Variables del panel: `MEDIFLOW_API_URL` (por defecto `http://localhost:8000`), `
 
 ## 11. Evidencias
 
-> **Pendiente de generar en un entorno con OCI real.** Las pruebas automatizadas usan un bucket en memoria; las capturas deben salir del panel y del bucket reales.
-> Caso sugerido: `samples/entradas/09_receta_inconsistente_hitl.txt` (ID usado en MF-20: `TEST-MF20-FINAL-HITL`), o cualquier documento que termine en `revision_humana`.
+Evidencias generadas por Kate con la versión final (#48, `7bf578e`) contra el bucket OCI real, usando el archivo `samples/entradas/09_receta_inconsistente_hitl.txt` con los IDs `MF12-EVID-APROBAR` y `MF12-EVID-RECHAZAR`.
 
-| Escenario | Archivos a guardar en `docs/assets/sprint-3/` | Estado |
+| Escenario | Archivos en `docs/assets/sprint-3/` | Estado |
 |---|---|---|
-| Caso pendiente en el panel | `evidencia-hitl-pendiente.png` | [ ] |
-| **APROBAR** — panel | `evidencia-hitl-aprobar-panel.png` | [ ] |
-| **APROBAR** — objeto `_decision.json` en OCI | `evidencia-hitl-aprobar-oci.png` y `respuesta-hitl-aprobar.json` | [ ] |
-| **RECHAZAR** (con motivo y notas) — panel | `evidencia-hitl-rechazar-panel.png` | [ ] |
-| **RECHAZAR** — objeto `_decision.json` en OCI | `evidencia-hitl-rechazar-oci.png` y `respuesta-hitl-rechazar.json` | [ ] |
-| Suite automatizada en verde | `evidencia-tests-automatizados.png` | [ ] |
+| Caso pendiente en el panel (APROBAR) | `evidencia-hitl-pendiente.png` | [x] |
+| Caso pendiente en el panel (RECHAZAR) | `evidencia-hitl-rechazar-pendiente.png` | [x] |
+| **APROBAR** — panel | `evidencia-hitl-aprobar-panel.png` | [x] |
+| **APROBAR** — objeto `_decision.json` en OCI | `evidencia-hitl-aprobar-oci.png` y `respuesta-hitl-aprobar.json` | [x] |
+| **RECHAZAR** (con motivo y notas) — panel | `evidencia-hitl-rechazar-panel.png` | [x] |
+| **RECHAZAR** — objeto `_decision.json` en OCI | `evidencia-hitl-rechazar-oci.png` y `respuesta-hitl-rechazar.json` | [x] |
+| Suite automatizada en verde | `evidencia-tests-automatizados.png` | [x] |
 
-Cada escenario debe usar un documento distinto (una decisión no se puede repetir sobre el mismo ciclo).
+Notas sobre las evidencias:
+
+- `MF12-EVID-APROBAR` tiene un evento extra en `historial/` y un objeto en `errores_tecnicos/MF12-EVID-APROBAR.json`: el primer envío falló porque el `.env` no tenía las claves de Gemini (no fue un fallo del código). El segundo envío salió bien y es el que referencia la decisión (`evento_referencia`).
+- Ambos casos usan el mismo archivo de entrada, por eso la `huella_sha256` coincide. Cada caso tiene un `documento_id` distinto, porque una decisión no se puede repetir sobre el mismo ciclo.
+- El panel muestra hora de Bogotá y el bucket UTC (5 horas de diferencia).
