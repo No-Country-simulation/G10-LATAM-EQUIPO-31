@@ -71,11 +71,11 @@ class DocumentoNoPendiente(ErrorAuditoria):  # -> HTTP 409
 
 
 class Almacen(Protocol):
-    """Lo mínimo que se necesita del almacenamiento (OCI en producción, memoria en tests)."""
+    """Lo mínimo que se necesita del almacenamiento: lo implementa OCIStorageService (producción) y, en tests, un almacén en memoria."""
 
     def listar(self, prefijo: str) -> list[tuple[str, datetime | None]]: ...
     def leer_json(self, nombre: str) -> dict[str, Any]: ...
-    def escribir_json_nuevo(self, nombre: str, contenido: dict[str, Any]) -> None:
+    def escribir_json_nuevo(self, nombre: str, contenido: dict[str, Any]) -> Any:
         """Escribe SIN sobrescribir; debe lanzar FileExistsError si el objeto ya existe."""
 
 

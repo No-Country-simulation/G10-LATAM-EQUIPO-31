@@ -62,7 +62,7 @@ Se registra en `main.py` con dos líneas (`import` + `app.include_router(router_
 
 ## 5. Persistencia y trazabilidad
 
-Objeto: `historial/{documento_id_sanitizado}/{AAAAMMDDTHHMMSSffffff}_decision.json`, escrito con `if_none_match="*"` (no sobrescribe; si otro auditor escribe en el mismo instante, el segundo recibe 409).
+Objeto: `historial/{documento_id_sanitizado}/{AAAAMMDDTHHMMSSffffff}_decision.json`, escrito con `OCIStorageService.escribir_json_nuevo` (apoyo de Kate, PR #47), que usa `if_none_match="*"` (no sobrescribe; si otro auditor escribe en el mismo instante, el segundo recibe 409).
 El orden por nombre garantiza que la decisión queda después del último evento aunque el reloj del servidor vaya atrasado.
 
 Ejemplo (generado con el código real):
@@ -87,13 +87,13 @@ Ejemplo (generado con el código real):
 ```
 
 - `evento_referencia`: evento de procesamiento sobre el que se decidió.
-- `huella_sha256`: **se copia del evento base solo si existe** (MF-22 aún no está en `develop`); si no existe, la decisión se guarda igual sin el campo. El nombre del campo es la constante `CAMPO_HUELLA` de `auditoria_eventos.py`: **pendiente de confirmar con Kate**.
+- `huella_sha256`: MF-22 (ya en `develop`) la escribe en el envelope de cada evento de procesamiento. La decisión la **copia del evento base** solo para trazabilidad y no la usa para decidir nada. En eventos anteriores a MF-22 no existe y la decisión se guarda igual, sin el campo. El nombre es la constante `CAMPO_HUELLA` de `auditoria_eventos.py`.
 - Cada decisión deja una línea de log (`mediflow.app.api.rutas_auditoria`) con documento, decisión, motivo y auditor; nunca el texto de las notas ni datos clínicos.
 
 ## 6. Integración con el resto del flujo
 
 - **Estándar y urgente:** sin cambios. Los documentos de esas rutas no entran a la bandeja y no se pueden «decidir» (409). Hay pruebas que lo verifican contra el `POST /documentos` real.
-- **MF-14 (alertas urgentes):** independiente. HITL no envía ni cancela alertas. En `develop`, un documento urgente con confianza Media/Baja va a `revision_humana` conservando `urgente=true`; el panel lo muestra primero. Si la alerta de MF-14 se dispara por el destino `urgente` o por el campo `urgente` es una definición de MF-14 (ver §8).
+- **MF-14 (alertas urgentes):** independiente. HITL no envía ni cancela alertas. En `develop`, un documento urgente con confianza Media/Baja va a `revision_humana` conservando `urgente=true`; el panel lo muestra primero. Criterio confirmado por Kimberlyn para MF-14: la alerta se dispara por `urgente = true` y no solo por el destino, de modo que un urgente que por confianza Media/Baja termina en `revision_humana` también genera alerta, con un mensaje que indica que está pendiente de revisión humana. Decidir en el panel no cancela ni modifica una alerta ya enviada.
 - **MF-21 (confianza):** el panel muestra `motivos_confianza` tal cual llegan (lista de textos) y no depende de su contenido.
 - **MF-22 (huella):** ver §5.
 
@@ -114,11 +114,11 @@ El panel previo se reutilizó solo en lo necesario:
 ## 8. Limitaciones y decisiones abiertas
 
 1. **Auditor sin autenticación (decisión del equipo):** `auditor` es texto libre. Cualquier integrante puede aprobar o rechazar escribiendo su nombre, y queda registrado tal cual. Aceptado para el MVP/pruebas; no es una garantía de identidad.
-2. **Casos urgentes en revisión humana:** MF-14 notifica solo lo urgente. Los casos pendientes de auditoría se consultan únicamente en el panel. Falta confirmar con MF-14 si la alerta se dispara por destino `urgente` o por `urgente=true` (determina si un urgente de baja confianza genera alerta).
+2. **Alertas:** MF-14 notifica solo lo urgente (`urgente = true`, criterio confirmado por Kimberlyn; lo implementa Sair). Los pendientes de auditoría que no son urgentes se consultan únicamente en el panel. MF-12 no agrega lógica de alertas.
 3. **Documento original:** el panel muestra la extracción y los metadatos, pero no el archivo original (`recibidos/`); no existe un endpoint que lo sirva.
-4. **Adaptador OCI:** `almacen_oci.py` usa atributos internos de `OCIStorageService`; pendiente convertirlos en métodos públicos (apoyo de Kate).
+4. **Persistencia OCI:** la bandeja y las decisiones usan `OCIStorageService.listar`, `leer_json` y `escribir_json_nuevo` (PR #47, apoyo de Kate). Esos métodos se probaron contra el bucket real en una clave temporal de `pruebas/`: no sobrescriben (412 → `FileExistsError`) y `listar` devuelve fechas reales.
 5. **Caché del panel:** la bandeja se cachea 30 s; «Actualizar bandeja» fuerza la lectura.
-6. **Sin prueba contra OCI real** en este desarrollo: las pruebas usan un bucket en memoria con los mismos nombres de objeto que el servicio real.
+6. **Flujo HITL aún sin prueba contra OCI real:** las pruebas automáticas usan el `OCIStorageService` real sobre un cliente OCI simulado; las evidencias de APROBAR y RECHAZAR (§11) deben salir del bucket real.
 
 ## 9. Pruebas
 
@@ -126,11 +126,10 @@ El panel previo se reutilizó solo en lo necesario:
 |---|---|---|
 | `tests/test_auditoria_eventos.py` | 20 | Reglas de bandeja y decisión: pendiente/resuelto, reprocesos, validaciones, no sobrescritura, huella opcional, reloj atrasado, objetos corruptos |
 | `tests/test_rutas_auditoria.py` | 5 | Endpoints: aprobar, rechazar con motivo, códigos 404/409/422, sin corrección clínica, logs |
-| `tests/test_hitl_flujo_integrado.py` | 6 | `POST /documentos` real → `revision_humana` → bandeja → aprobar / rechazar → historial; estándar y urgente intactos; urgente de baja confianza |
+| `tests/test_hitl_flujo_integrado.py` | 6 | `POST /documentos` real + `OCIStorageService` real (cliente OCI simulado) → `revision_humana` → bandeja → aprobar / rechazar → historial; la decisión hereda el SHA-256 real (MF-22); estándar y urgente intactos; urgente de baja confianza |
 | `tests/test_panel_hitl_ui.py` | 7 | Panel (Streamlit AppTest): sin edición, auditor obligatorio, motivo y notas al rechazar, conflicto |
-| `tests/test_almacen_oci.py` | 3 | Adaptador: paginación, no sobrescribir (412), errores no ocultos |
 
-Resultado: `python -m pytest` → **216 pasan** (175 existentes de `develop` + 41 nuevas).
+Resultado: `python -m pytest` → **229 pasan** (191 existentes: `develop` con MF-22 y los métodos OCI del PR #47; más 38 nuevas de MF-12).
 
 ## 10. Cómo ejecutarlo (PowerShell, desde la raíz del repo)
 

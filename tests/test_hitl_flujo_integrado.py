@@ -1,12 +1,16 @@
 """
 MF-12: flujo HITL de punta a punta sobre el código REAL de develop.
 
-POST /documentos real (routes.py + nodos reales de validación, confianza y routing) con los agentes LLM
-simulados y un bucket de OCI en memoria. Se comprueba que:
+POST /documentos real (routes.py + nodos reales de validación, confianza y routing + huella MF-22) y el
+OCIStorageService REAL (incluidos listar / leer_json / escribir_json_nuevo del PR #47) sobre un cliente
+de OCI simulado que, como el real, fecha cada objeto al escribirlo. Los agentes LLM están simulados.
+Se comprueba que:
   * un documento de confianza no alta se deriva a revision_humana y aparece en la bandeja,
   * APROBAR y RECHAZAR (con motivo) quedan persistidos en historial/ y asociados al documento,
+    y la decisión hereda el SHA-256 real del contenido,
   * las rutas estándar y urgente siguen funcionando igual y no entran a la bandeja.
 """
+import hashlib
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,49 +25,32 @@ from app.schemas.clasificacion import Classification, DocumentType
 from app.schemas.extraccion import Diagnostico, ExtraccionClinica, NivelUrgencia, Paciente, Profesional
 from app.services import auditoria_eventos as ev
 from app.services import oci_storage_service as oci
+from tests.test_oci_storage_service import ENV_VARS, ObjectStorageClientFalso
 
 SAMPLES = Path(__file__).resolve().parents[1] / "samples" / "entradas"
 
 
-class BucketMemoria:
-    """Un único bucket en memoria que usa los MISMOS nombres de objeto que OCIStorageService real
-    y expone, además, la interfaz mínima `Almacen` de la bandeja HITL."""
+class ClienteOCIConFechas(ObjectStorageClientFalso):
+    """El cliente falso de develop deja las fechas en None; el OCI real fecha cada objeto al escribirlo."""
 
-    def __init__(self):
-        self.objetos: dict[str, bytes] = {}
-        self.fechas: dict[str, datetime] = {}
+    def put_object(self, namespace_name, bucket_name, object_name, put_object_body, if_none_match=None, content_type=None):
+        super().put_object(namespace_name, bucket_name, object_name, put_object_body, if_none_match, content_type)
+        ahora = datetime.now(timezone.utc)
+        self.fijar_fechas(namespace_name, bucket_name, object_name, time_created=ahora, time_modified=ahora)
 
-    # --- lo que usa routes.py (OCIStorageService) ---
-    def upload_document(self, document_id, content, filename):
-        nombre = f"recibidos/{oci._sanitizar_nombre_archivo(document_id)}_{oci._sanitizar_nombre_archivo(filename)}"
-        self._poner(nombre, content)
-        return nombre
 
-    def upload_resultado(self, documento_id, estado, resultado):
-        nombre = oci._object_name_resultado(documento_id, estado)
-        self._poner(nombre, json.dumps(resultado, ensure_ascii=False, default=str).encode())
-        return nombre
+class Bucket:
+    """Vista de lectura del bucket simulado, para las aserciones."""
 
-    def upload_historial(self, documento_id, momento, evento):
-        nombre = oci._object_name_historial(documento_id, oci._id_temporal(momento))
-        self._poner(nombre, json.dumps(evento, ensure_ascii=False, default=str).encode())
-        return nombre
+    def __init__(self, servicio):
+        self.servicio = servicio
 
-    # --- lo que usa la bandeja HITL (Almacen) ---
-    def _poner(self, nombre, contenido):
-        self.objetos[nombre] = contenido
-        self.fechas[nombre] = datetime.now(timezone.utc)
-
-    def listar(self, prefijo):
-        return [(n, self.fechas[n]) for n in self.objetos if n.startswith(prefijo)]
+    @property
+    def objetos(self) -> dict[str, bytes]:
+        return {nombre: valor for (_, _, nombre), valor in self.servicio._client._objetos.items()}
 
     def leer_json(self, nombre):
-        return json.loads(self.objetos[nombre])
-
-    def escribir_json_nuevo(self, nombre, contenido):
-        if nombre in self.objetos:
-            raise FileExistsError(nombre)
-        self._poner(nombre, json.dumps(contenido, ensure_ascii=False).encode())
+        return self.servicio.leer_json(nombre)
 
 
 def _clasificacion(score):
@@ -84,10 +71,15 @@ def _extraccion(urgencia=NivelUrgencia.NO_URGENTE):
 
 @pytest.fixture
 def entorno(monkeypatch):
-    bucket = BucketMemoria()
-    monkeypatch.setattr(routes, "OCIStorageService", lambda: bucket)
+    for clave, valor in ENV_VARS.items():
+        monkeypatch.setenv(clave, valor)
+    monkeypatch.setattr(oci.oci.config, "validate_config", lambda config: None)
+    monkeypatch.setattr(oci.oci.object_storage, "ObjectStorageClient", ClienteOCIConFechas)
+    servicio = oci.OCIStorageService()
+    monkeypatch.setattr(routes, "OCIStorageService", lambda: servicio)             # POST /documentos
+    monkeypatch.setattr(rutas_auditoria, "OCIStorageService", lambda: servicio)    # bandeja y decisión (obtener_almacen real)
     monkeypatch.setattr(graph, "ProveedorGemini", lambda: object())
-    main.app.dependency_overrides[rutas_auditoria.obtener_almacen] = lambda: bucket
+    bucket = Bucket(servicio)
 
     def procesar(doc_id, score, urgencia=NivelUrgencia.NO_URGENTE):
         monkeypatch.setattr(graph, "clasificar_documento", lambda _d, **_k: _clasificacion(score))
@@ -100,7 +92,6 @@ def entorno(monkeypatch):
 
     client = TestClient(main.app)
     yield client, bucket, procesar
-    main.app.dependency_overrides.clear()
 
 
 def test_caso_derivado_a_revision_humana_aparece_en_la_bandeja(entorno):
@@ -152,16 +143,17 @@ def test_rechazar_con_motivo_queda_persistido_y_trazable(entorno):
     assert client.get("/auditoria/bandeja").json()["pendientes"] == []
 
 
-def test_la_decision_queda_con_huella_cuando_el_procesamiento_ya_la_trae(entorno):
-    """MF-22 aún no está en develop: se simula un evento que ya trae `huella_sha256` y se comprueba que se copia."""
+def test_la_decision_hereda_el_sha256_real_del_contenido(entorno):
+    """MF-22 ya está en develop: el procesamiento guarda `huella_sha256` y la decisión la copia (solo trazabilidad)."""
     client, bucket, procesar = entorno
     procesar("HITL-4", score=0.40)
-    nombre = next(n for n in bucket.objetos if n.startswith("historial/HITL-4/"))
-    evento = bucket.leer_json(nombre)
-    evento[ev.CAMPO_HUELLA] = "A" * 64
-    bucket.objetos[nombre] = json.dumps(evento).encode()
+    esperada = hashlib.sha256((SAMPLES / "01_receta_medica.txt").read_bytes()).hexdigest()
+    evento = next(bucket.leer_json(n) for n in bucket.objetos if n.startswith("historial/HITL-4/"))
+    assert evento[ev.CAMPO_HUELLA] == esperada
     r = client.post("/auditoria/HITL-4/decision", json={"decision": "APROBADO", "auditor": "kim"})
-    assert r.json()[ev.CAMPO_HUELLA] == "a" * 64
+    assert r.status_code == 201 and r.json()[ev.CAMPO_HUELLA] == esperada
+    guardado = bucket.leer_json(next(n for n in bucket.objetos if n.endswith("_decision.json")))
+    assert guardado[ev.CAMPO_HUELLA] == esperada
 
 
 def test_rutas_estandar_y_urgente_siguen_funcionando_y_no_entran_a_la_bandeja(entorno):

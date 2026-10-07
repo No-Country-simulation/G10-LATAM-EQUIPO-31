@@ -20,7 +20,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.services import auditoria_eventos as eventos
-from app.services.almacen_oci import AlmacenOCI
 from app.services.oci_storage_service import OCIStorageService
 
 logger = logging.getLogger("mediflow.app.api.rutas_auditoria")
@@ -29,7 +28,8 @@ router = APIRouter(tags=["auditoria"])
 
 
 def obtener_almacen() -> eventos.Almacen:
-    return AlmacenOCI(OCIStorageService())
+    # OCIStorageService ya expone listar / leer_json / escribir_json_nuevo (PR #47, MF-12 apoyo OCI).
+    return OCIStorageService()
 
 
 class DecisionEntrada(BaseModel):
