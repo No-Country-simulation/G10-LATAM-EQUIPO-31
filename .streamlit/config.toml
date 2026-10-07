@@ -1,0 +1,22 @@
+# Tema MediFlow (colores tomados de la interfaz original) y ajustes de idioma/barra.
+# Ejecutar SIEMPRE desde la raíz del proyecto:  streamlit run frontend/panel_hitl.py
+[theme]
+base = "dark"
+primaryColor = "#ff4b4b"            # radios, pestañas activas, enlaces
+backgroundColor = "#0a0f23"         # fondo principal (azul noche)
+secondaryBackgroundColor = "#121a3e" # tarjetas, métricas, expanders
+textColor = "#fafafa"
+
+[theme.sidebar]
+backgroundColor = "#090c1d"
+secondaryBackgroundColor = "#121a3e"
+
+[client]
+toolbarMode = "minimal"             # oculta "Deploy" (inglés) y menús de desarrollo
+
+[server]
+headless = true
+maxUploadSize = 20                 # MB; coincide con MEDIFLOW_MAX_MB_CARGA
+
+[browser]
+gatherUsageStats = false
