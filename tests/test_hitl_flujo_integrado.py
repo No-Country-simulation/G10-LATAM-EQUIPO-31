@@ -22,7 +22,7 @@ import main
 from app.api import routes, rutas_auditoria
 from app.graph import graph
 from app.schemas.clasificacion import Classification, DocumentType
-from app.schemas.extraccion import Diagnostico, ExtraccionClinica, NivelUrgencia, Paciente, Profesional
+from app.schemas.extraccion import Diagnostico, ExtraccionClinica, Medicamento, NivelUrgencia, Paciente, Profesional
 from app.services import auditoria_eventos as ev
 from app.services import oci_storage_service as oci
 from tests.test_oci_storage_service import ENV_VARS, ObjectStorageClientFalso
@@ -63,8 +63,19 @@ def _clasificacion(score):
 def _extraccion(urgencia=NivelUrgencia.NO_URGENTE):
     return ExtraccionClinica(
         paciente=Paciente(nombre_completo="Laura Martínez Gómez", edad=45),
-        profesional=Profesional(nombre_completo="Dr. Andrés Ramírez", registro_profesional="MP-45821"),
-        diagnosticos=[Diagnostico(descripcion="Hipertensión arterial esencial", codigo_cie10="I10")],
+        profesional=Profesional(
+            nombre_completo="Dr. Andrés Ramírez",
+            registro_profesional="MP-45821",
+        ),
+        diagnosticos=[
+            Diagnostico(
+                descripcion="Hipertensión arterial esencial",
+                codigo_cie10="I10",
+            )
+        ],
+        medicamentos=[
+            Medicamento(nombre="Enalapril", dosis="10mg")
+        ],
         nivel_urgencia=urgencia,
     )
 
