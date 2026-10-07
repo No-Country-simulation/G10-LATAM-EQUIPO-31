@@ -13,7 +13,7 @@ Los archivos de prueba utilizados para la validación del MVP se organizan dentr
 | **REG-01** | Regresión (Existentes) | `.md` | Sintético | Asegurar compatibilidad con el flujo previo de las tareas anteriores. |
 | **STD-01** | Estándar | `PDF` | Realista / Anonimizado | Flujo de ingreso normal de un paciente sin prioridades críticas. |
 | **URG-01** | Urgente Explícito | `(PNG/JPG)`| Anonimizado | Documento médico que incluye una etiqueta textual directa de "Prioridad: Urgente". |
-| **INF-01** | Urgencia Inferida | `.md` | Realista | **Inferencia Clínica:** Paciente con signos vitales en estado crítico (ej. Saturación < 85%) sin etiqueta explícita de prioridad. |
+| **INF-01** | Urgencia Inferida | `PNG` | Realista | **Inferencia Clínica:** Paciente con signos vitales en estado crítico (ej. Saturación < 85%) sin etiqueta explícita de prioridad. |
 | **AMB-01** | Ambiguo / HITL | `PDF` | Sintético | Datos clínicos contradictorios para evaluar umbrales de baja confianza o activación de revisión humana. |
 
 ## 3. Casos de Inferencia de Urgencia Clínica
