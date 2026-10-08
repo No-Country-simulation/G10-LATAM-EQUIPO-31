@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "tipo_evento": "decision_humana",
+  "documento_id": "MF12-EVID-APROBAR",
+  "decision": "APROBADO",
+  "notas": "Aprobado como evidencia de MF-12 (Sprint 3)",
+  "auditor": "katherine.s",
+  "timestamp": "2026-10-07T05:41:12.378723+00:00",
+  "tipo_documento": "Receta Medica",
+  "nivel_urgencia": "no_urgente",
+  "urgente": false,
+  "categoria_confianza": "Media",
+  "evento_referencia": "historial/MF12-EVID-APROBAR/20261007T052859014975.json",
+  "huella_sha256": "93bdb8c57dd3dea2b17641e796073dc6d2296fdc600c49e7100476faf8cf73c9"
+}

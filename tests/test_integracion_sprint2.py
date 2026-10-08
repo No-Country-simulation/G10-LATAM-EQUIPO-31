@@ -12,7 +12,7 @@ Ejecutar: pytest tests/test_integracion_sprint2.py -v
 import pytest
 from app.schemas.state import MediFlowState
 from app.schemas.clasificacion import Classification, DocumentType
-from app.schemas.extraccion import ExtraccionClinica, Paciente, NivelUrgencia
+from app.schemas.extraccion import ExtraccionClinica, Paciente, NivelUrgencia, Profesional
 from app.schemas.respuesta import RespuestaProcesamiento, ResultadoValidacion
 
 # Importación del nodo de routing (MF-11)
@@ -131,10 +131,12 @@ def extraccion_factory(urgencia=NivelUrgencia.NO_URGENTE, estudios=None, campos_
         paciente=Paciente(nombre_completo="María López", edad=45),
         nivel_urgencia=urgencia,
     )
-    if hasattr(extraccion, "estudios_solicitados"):
-        extraccion.estudios_solicitados = estudios if estudios is not None else []
     if hasattr(extraccion, "profesional"):
-        extraccion.profesional = None
+        extraccion.profesional = Profesional(nombre_completo="Dr. Carlos Ruiz")
+    if hasattr(extraccion, "diagnosticos"):
+        extraccion.diagnosticos = ["Consulta general"]
+    if hasattr(extraccion, "estudios_solicitados"):
+        extraccion.estudios_solicitados = estudios if estudios is not None else ["Radiografía de Tórax"]
 
     # Asignación de campos no encontrados para evaluación de confianza en MF-10
     campos_faltantes = campos_no_encontrados if campos_no_encontrados is not None else []
@@ -152,7 +154,7 @@ def test_integracion_escenario_estandar_exitoso():
     """
     estado_inicial: MediFlowState = {
         "clasificacion": clasificacion_factory(prioridad="Rutina", tipo_doc=DocumentType.INFORME_ESTUDIO_DIAGNOSTICO),
-        "extraccion": extraccion_factory(urgencia=NivelUrgencia.NO_URGENTE, estudios=[]),
+        "extraccion": extraccion_factory(urgencia=NivelUrgencia.NO_URGENTE, estudios=["Radiografía de Tórax"]),
         "validacion_ok": True,
         "errores_validacion": [],
     }
@@ -173,7 +175,7 @@ def test_integracion_escenario_urgente_limpio():
     """
     estado_inicial: MediFlowState = {
         "clasificacion": clasificacion_factory(prioridad="Urgente", tipo_doc=DocumentType.INFORME_ESTUDIO_DIAGNOSTICO),
-        "extraccion": extraccion_factory(urgencia=NivelUrgencia.EMERGENCIA, estudios=[]),
+        "extraccion": extraccion_factory(urgencia=NivelUrgencia.EMERGENCIA, estudios=["Radiografía de Tórax"]),
         "validacion_ok": True,
         "errores_validacion": [],
     }
@@ -300,7 +302,7 @@ def test_integracion_penalizacion_combinada_secundario_y_critico():
         "clasificacion": clasificacion_factory(prioridad="Rutina", score_modelo=0.70),
         "extraccion": extraccion_factory(
             urgencia=NivelUrgencia.NO_URGENTE, 
-            campos_no_encontrados=["numero_documento", "medicamentos"]
+            campos_no_encontrados=["numero_documento", "paciente.nombre_completo"]
         ),
         "validacion_ok": True,
         "errores_validacion": [],
