@@ -38,7 +38,7 @@ Evidencias:
 - [Evidencia HITL — Caso pendiente](./assets/sprint-3/mf-17-validacion-e2e/evidencia-E2E-HITL-pendiente.png)
 - [Evidencia HITL — Aprobación](./assets/sprint-3/mf-17-validacion-e2e/evidencia-E2E-HITL-aprobacion.png)
 - [Evidencia HITL — Historial de aprobación](./assets/sprint-3/mf-17-validacion-e2e/evidencia-E2E-HITL-aprobacion-historial.png)
-
+- [Evidencia HITL — Aprobación y persistencia](./assets/sprint-3/mf-17-validacion-e2e/evidencia-test-HITL-aprobacion-persistencia.png)
 ---
 
 ### 3. Flujo HITL — rechazo
