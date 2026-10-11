@@ -83,6 +83,17 @@ def resumir_documento(eventos: list[dict[str, Any]]) -> dict[str, Any] | None:
     }
 
 
+def avisos_sin_repetir(item: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """
+    (motivos, advertencias) sin textos repetidos: el pipeline puede dejar el mismo mensaje en
+    `motivos_confianza` y en `inconsistencias`/`errores_validacion`; se muestra una sola vez.
+    """
+    motivos = list(dict.fromkeys(item["motivos_confianza"]))
+    vistos = set(motivos)
+    advertencias = [a for a in dict.fromkeys(item["errores_validacion"] + item["inconsistencias"]) if a not in vistos]
+    return motivos, advertencias
+
+
 def filas_linea_tiempo(eventos: list[dict[str, Any]]) -> list[dict[str, str]]:
     filas = []
     for e in eventos:
@@ -147,7 +158,7 @@ def _mostrar_documento(documento_id: str, eventos: list[dict[str, Any]], clave: 
     with col_a:
         st.markdown(f"**Tipo de documento:** {item['tipo_documento']}")
         if item["timestamp"]:
-            st.markdown(f"**Procesado:** {formatear_fecha(item['timestamp'])}")
+            st.markdown(f"**Procesado:** {formatear_fecha(item['timestamp'])} ({u.ZONA_HORARIA})")
         if item["validacion_ok"] is not None:
             st.markdown(f"**Validación:** {'✅ correcta' if item['validacion_ok'] else '⚠️ con errores'}")
         clas = item["clasificacion"]
@@ -155,10 +166,11 @@ def _mostrar_documento(documento_id: str, eventos: list[dict[str, Any]], clave: 
             st.markdown(f"**Autoevaluación del clasificador:** {clas['score_confianza_clasificacion']:.2f}")
         if item["justificacion_enrutamiento"]:
             st.markdown(f"**Por qué se enrutó así:** {item['justificacion_enrutamiento']}")
-        for motivo in item["motivos_confianza"]:
+        motivos, advertencias = avisos_sin_repetir(item)
+        for motivo in motivos:
             st.markdown(f"- {motivo}")
-        for error in item["errores_validacion"] + item["inconsistencias"]:
-            st.markdown(f"- ⚠️ {error}")
+        for advertencia in advertencias:
+            st.markdown(f"- ⚠️ {advertencia}")
         if clas.get("especialidad"):
             st.markdown(f"**Especialidad:** {clas['especialidad']}")
         if clas.get("nivel_prioridad"):
@@ -188,6 +200,7 @@ def _mostrar_documento(documento_id: str, eventos: list[dict[str, Any]], clave: 
             st.json({"clasificacion": item["clasificacion"], "extraccion": item["extraccion"]}, expanded=False)
 
     with st.expander("Línea de tiempo del documento", expanded=True):
+        st.caption(f"Horas en la zona {u.ZONA_HORARIA} (se cambia con la variable MEDIFLOW_ZONA_HORARIA).")
         st.dataframe(filas_linea_tiempo(eventos), hide_index=True, width="stretch")
         fallos = item["recorrido"].get("fallos_tecnicos")
         if fallos:

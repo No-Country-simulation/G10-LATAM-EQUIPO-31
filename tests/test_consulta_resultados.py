@@ -21,7 +21,7 @@ from tests.test_hitl_flujo_integrado import entorno  # noqa: E402,F401  (fixture
 from utils_frontend import ErrorClienteAPI  # noqa: E402
 
 
-def _proc(estado="estandar", ts="2026-10-10T10:00:00+00:00", score=0.9, cat="Alta", urgencia="no_urgente", doc="DOC-1"):
+def _proc(estado="estandar", ts="2026-10-10T10:00:00+00:00", score=0.9, cat="Alta", urgencia="no_urgente", doc="DOC-1", **extra):
     return {
         "documento_id": doc, "estado": estado, "timestamp": ts, "nivel_urgencia": urgencia,
         "resumen": {"categoria_confianza": cat},
@@ -32,6 +32,7 @@ def _proc(estado="estandar", ts="2026-10-10T10:00:00+00:00", score=0.9, cat="Alt
                            "campos_no_encontrados": ["fecha_emision"]},
             "validacion_ok": True, "score_confianza_final": score, "categoria_confianza": cat,
             "motivos_confianza": ["Confianza alta del clasificador"], "justificacion_enrutamiento": "Ruta estándar.",
+            **extra,
         },
     }
 
@@ -193,3 +194,28 @@ def test_ui_id_vacio_no_llama_a_la_api(monkeypatch):
     monkeypatch.setattr(u, "_solicitar", lambda *a, **k: llamadas.append(a) or {"eventos": []})
     at = _consultar(_abrir(), "   ")
     assert any("Escriba el ID" in e.value for e in at.error) and llamadas == []
+
+
+# --------------------------------------------------------------------------
+# Avisos repetidos y zona horaria (observaciones de la prueba con OCI y Gemini)
+# --------------------------------------------------------------------------
+REPETIDO = "El documento es una 'Receta Medica' pero incluye estudios complejos."
+
+
+def test_avisos_sin_repetir_muestra_una_sola_vez_el_mismo_texto():
+    item = cr.resumir_documento([_proc("revision_humana", motivos_confianza=[REPETIDO, REPETIDO],
+                                       inconsistencias=[REPETIDO, "Dosis fuera de rango"])])["item"]
+    motivos, advertencias = cr.avisos_sin_repetir(item)
+    assert motivos == [REPETIDO]
+    assert advertencias == ["Dosis fuera de rango"]       # la inconsistencia repetida ya salió como motivo
+
+
+def test_ui_aviso_repetido_aparece_una_sola_vez_y_se_indica_la_zona_horaria(monkeypatch):
+    monkeypatch.setattr(u, "_solicitar", lambda m, r, **k: {"eventos": [
+        _proc("revision_humana", motivos_confianza=[REPETIDO], inconsistencias=[REPETIDO])]})
+    at = _consultar(_abrir(), "DOC-1")
+    assert not at.exception, at.exception
+    texto = " ".join(m.value for m in at.markdown)
+    assert texto.count(REPETIDO) == 1
+    assert f"({u.ZONA_HORARIA})" in texto                  # «Procesado: 10/10/2026 05:00 (America/Bogota)»
+    assert any(u.ZONA_HORARIA in c.value for c in at.caption)

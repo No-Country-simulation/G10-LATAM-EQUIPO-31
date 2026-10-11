@@ -65,6 +65,10 @@ ETIQUETA_ESTADO = {
 }
 
 
+class TiempoAgotadoCarga(ErrorClienteAPI):
+    """La API no respondió a tiempo, pero el documento pudo haberse procesado igualmente."""
+
+
 @dataclass(frozen=True)
 class ValidacionArchivo:
     ok: bool
@@ -90,8 +94,8 @@ def validar_archivo(nombre: str, contenido: bytes, max_mb: int = MAX_MB_CARGA) -
 
     if not contenido:
         return _rechazo(f"El archivo «{nombre}» está vacío.")
-    if len(contenido) > max_mb * 1024 * 1024:
-        return _rechazo(f"El archivo «{nombre}» supera el tamaño máximo permitido ({max_mb} MB).")
+    if len(contenido) >= max_mb * 1024 * 1024:
+        return _rechazo(f"El archivo «{nombre}» debe pesar menos de {max_mb} MB.")
 
     # El contenido debe corresponder a la extensión (evita, p. ej., un .txt renombrado a .pdf).
     coincide = {
@@ -151,12 +155,12 @@ def enviar_documento(documento_id: str, canal_origen: str, nombre_archivo: str, 
         )
     except requests.exceptions.ConnectionError as exc:
         raise ErrorClienteAPI(
-            f"No hay conexión con la API en {API_BASE_URL} (¿está corriendo `uvicorn main:app`?)."
+            f"No hay conexión con la API ({API_BASE_URL}). Verifique que el servicio esté en ejecución e inténtelo de nuevo."
         ) from exc
     except requests.exceptions.Timeout as exc:
-        raise ErrorClienteAPI(
-            f"La API no respondió en {TIMEOUT_CARGA} s. El documento pudo haberse procesado: "
-            "revise el resultado antes de reenviarlo."
+        raise TiempoAgotadoCarga(
+            f"La API no respondió en {TIMEOUT_CARGA} s. El documento pudo haberse procesado: búsquelo en "
+            "«Consulta de resultados» (el ID ya queda precargado) antes de reenviarlo, para no duplicarlo."
         ) from exc
     if not respuesta.ok:
         raise ErrorClienteAPI(_mensaje_error(respuesta))
@@ -194,9 +198,9 @@ def render_carga_archivos(clave: str = "carga") -> None:
         archivo = st.file_uploader(
             "Cargar archivo",
             key=f"{clave}_archivo_{ronda}",
-            help=f"Formatos permitidos: {LISTA_FORMATOS}. Tamaño máximo: {MAX_MB_CARGA} MB.",
+            help=f"Formatos permitidos: {LISTA_FORMATOS}. Debe pesar menos de {MAX_MB_CARGA} MB.",
         )  # sin `type=`: así el aviso de formato no válido es el nuestro (en español y con la lista de formatos)
-        st.caption(f"Formatos permitidos: {LISTA_FORMATOS} · Máx. {MAX_MB_CARGA} MB")
+        st.caption(f"Formatos permitidos: {LISTA_FORMATOS} · Tamaño: menos de {MAX_MB_CARGA} MB")
 
         validacion = None
         contenido = b""
@@ -221,6 +225,9 @@ def render_carga_archivos(clave: str = "carga") -> None:
                 try:
                     with st.spinner("Procesando el documento en el pipeline…"):
                         resp = enviar_documento(documento_id, canal_origen, archivo.name, contenido, validacion.mime)
+                except TiempoAgotadoCarga as exc:
+                    st.session_state["ultimo_documento_id"] = documento_id.strip()  # para consultarlo sin reescribir el ID
+                    st.error(f"No se pudo confirmar el envío: {exc}")
                 except ErrorClienteAPI as exc:
                     st.error(f"No se pudo enviar el documento: {exc}")
                 else:

@@ -67,6 +67,14 @@ def test_supera_el_tamano_maximo():
     assert not v.ok and "1 MB" in v.error
 
 
+def test_tamano_limite_exacto_se_rechaza_y_uno_menos_pasa():
+    """«Menos de N MB»: igual que el cargador de Streamlit, que rechaza los archivos de exactamente N MB."""
+    limite = 1024 * 1024
+    exacto = ca.validar_archivo("justo.pdf", PDF + b"0" * (limite - len(PDF)), max_mb=1)
+    assert not exacto.ok and "menos de 1 MB" in exacto.error
+    assert ca.validar_archivo("casi.pdf", PDF + b"0" * (limite - len(PDF) - 1), max_mb=1).ok
+
+
 @pytest.mark.parametrize("nombre", ["falso.pdf", "falso.png", "falso.jpg"])
 def test_extension_que_no_coincide_con_el_contenido(nombre):
     v = ca.validar_archivo(nombre, b"esto es texto plano renombrado")
@@ -168,11 +176,14 @@ def test_fallo_tecnico_500_muestra_el_error_del_flujo(monkeypatch):
 
 def test_sin_conexion_y_timeout(monkeypatch):
     _con_sesion(monkeypatch, requests.exceptions.ConnectionError())
-    with pytest.raises(ErrorClienteAPI, match="No hay conexión"):
+    with pytest.raises(ErrorClienteAPI, match="No hay conexión") as sin_conexion:
         ca.enviar_documento("DOC-1", "c", "a.pdf", PDF, "application/pdf")
+    assert "uvicorn" not in str(sin_conexion.value)            # mensaje para la persona usuaria, no para quien desarrolla
     _con_sesion(monkeypatch, requests.exceptions.ReadTimeout())
-    with pytest.raises(ErrorClienteAPI, match="antes de reenviarlo"):
+    with pytest.raises(ca.TiempoAgotadoCarga, match="antes de reenviarlo") as timeout:
         ca.enviar_documento("DOC-1", "c", "a.pdf", PDF, "application/pdf")
+    assert "Consulta de resultados" in str(timeout.value)       # indica dónde comprobar si se procesó
+    assert isinstance(timeout.value, ErrorClienteAPI)
 
 
 # --------------------------------------------------------------------------
@@ -296,3 +307,15 @@ def test_ui_id_invalido_se_avisa_antes_de_enviar(monkeypatch):
     _boton_enviar(at).click().run()
     assert any("ID del documento" in e.value for e in at.error)
     assert sesion.llamadas == []                           # no se llamó a la API
+
+
+def test_ui_timeout_precarga_el_id_en_la_consulta_y_no_pierde_el_formulario(monkeypatch):
+    _con_sesion(monkeypatch, requests.exceptions.ReadTimeout())
+    at = _abrir_pagina()
+    at.text_input[0].set_value("PRUEBA-LENTO-001")
+    at.file_uploader[0].upload("grande.pdf", PDF, "application/pdf").run()
+    _boton_enviar(at).click().run()
+    assert not at.exception, at.exception
+    assert any("No se pudo confirmar el envío" in e.value and "Consulta de resultados" in e.value for e in at.error)
+    assert at.session_state["ultimo_documento_id"] == "PRUEBA-LENTO-001"   # la consulta lo trae escrito
+    assert at.file_uploader[0].value is not None
