@@ -197,6 +197,6 @@ Los ajustes 3, 4, 5, 7 y 9 se verificaron con pruebas automatizadas y con captur
 
 ## 13. Pendiente
 
-- [ ] Anexar `evidencia-id-repetido-listado.txt` (listado de objetos del bucket con el ID repetido, observación 2), que Kate adjuntó en su comentario del PR.
+- [x] Anexar `evidencia-id-repetido-listado.txt` (listado de objetos del bucket con el ID repetido, observación 2), que Kate adjuntó en su comentario del PR.
 - [ ] Opcional: que Kate repita en su entorno el PDF de 19 MB y el archivo de 20 MB para ver los mensajes ajustados.
 - [ ] Decidir con el equipo dónde se atienden las observaciones 2, 7 y 8, que corresponden a otras partes del sistema.
