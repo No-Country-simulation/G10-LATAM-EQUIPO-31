@@ -36,7 +36,7 @@ Solo archivos nuevos; no se modificó ningún archivo existente.
 | `frontend/panel_consulta.py` | Página de consulta |
 | `frontend/mediflow.py` | Punto de entrada con menú lateral: **Carga de documentos**, **Consulta de resultados** y **Revisión humana** |
 | `tests/test_carga_archivos.py` | 43 pruebas automatizadas |
-| `tests/test_consulta_resultados.py` | 16 pruebas automatizadas |
+| `tests/test_consulta_resultados.py` | 18 pruebas automatizadas |
 
 ## 3. Carga: formatos aceptados
 
@@ -90,7 +90,7 @@ Al terminar bien, muestra el documento, el destino (Automático, Alerta urgente 
 
 ## 7. Consulta de resultados
 
-Dado el ID de un documento ya enviado, muestra cómo quedó su procesamiento. **Solo lectura:** usa `GET /documentos/{id}/historial` (ya existente), que devuelve cada corrida con su resultado y las decisiones de revisión humana. Reutiliza la misma normalización del panel HITL (`utils_frontend._item_desde_evento`), por lo que ambos paneles muestran lo mismo.
+Dado el ID de un documento ya enviado, muestra cómo quedó su procesamiento. **Solo lectura:** usa `GET /documentos/{id}/historial` (ya existente), que devuelve cada corrida con su resultado y las decisiones de revisión humana. Reutiliza la misma normalización del panel HITL (`utils_frontend._item_desde_evento`), por lo que ambos paneles muestran lo mismo. Si se cambia el ID (a mano o por la precarga tras un envío nuevo), el resultado anterior se oculta hasta pulsar «Consultar». El campo del ID no está dentro de un formulario, por lo que Enter no consulta.
 
 | Situación del documento | Qué muestra |
 |---|---|
@@ -121,7 +121,7 @@ Direcciones: `/carga`, `/consulta` y `/revision`.
 
 ## 10. Pruebas automatizadas y evidencias
 
-**Automatizadas:** `python -m pytest` → **331 pasan** (272 existentes + 59 nuevas de MF-28: 43 de carga y 16 de consulta), con `streamlit==1.64.0`, la versión fijada en `requirements.txt`.
+**Automatizadas:** `python -m pytest` → **333 pasan** (272 existentes + 61 nuevas de MF-28: 43 de carga y 18 de consulta), con `streamlit==1.64.0`, la versión fijada en `requirements.txt`.
 
 Cubren: validación de cada formato y de cada rechazo (incluido el límite de tamaño), campos y generación de ID, cliente HTTP (éxito, 415, 500, sin conexión y tiempo agotado), lectura del historial y situaciones de la consulta (automático, pendiente, aprobado, rechazado, reprocesado, error técnico, avisos sin repetir), **contratos contra el backend real** (los 5 formatos pasan; la consulta interpreta lo que guarda el flujo real de `POST /documentos` y de las decisiones HITL) y el flujo completo de ambas pantallas con `AppTest`.
 
@@ -131,7 +131,7 @@ Cubren: validación de cada formato y de cada rechazo (incluido el límite de ta
 
 | Escenario | Archivo | Estado |
 |---|---|---|
-| Resultado de `pytest` (331 pasan) | [evidencia-tests-automatizados.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-tests-automatizados.png) | OK |
+| Resultado de `pytest` (333 pasan) | [evidencia-tests-automatizados.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-tests-automatizados.png) | OK |
 | Carga: estado inicial | [evidencia-carga-estado-inicial.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-carga-estado-inicial.png) | OK |
 | Carga: formato no válido (`.docx`) con la lista de formatos | [evidencia-carga-formato-no-valido.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-carga-formato-no-valido.png) | OK |
 | Carga: archivo válido (`.pdf`) y botón habilitado | [evidencia-carga-archivo-valido.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-carga-archivo-valido.png) | OK |
@@ -222,8 +222,9 @@ Observaciones opcionales de Kate, que se dejan sin cambios de código:
 | 8 | Un puntaje de 0.93 queda «Alta» en el caso 001 y «Media» en el 007 | La categoría depende de más factores que el puntaje: en `confianza.py` baja de Alta a Media cuando hay inconsistencias, y los motivos del 007 incluyen una («Receta Médica» con estudios complejos). Es comportamiento intencional de la lógica de confianza (MF-10 / MF-21), no de MF-28; queda pendiente que la pantalla explique el motivo |
 | 9 | Las horas aparecen en UTC-5, no en la hora local de quien consulta (Kate está en UTC-3) | La zona **ya es configurable** con `MEDIFLOW_ZONA_HORARIA` (por defecto `America/Bogota`), compartida con el panel HITL. **Ajustado:** la consulta indica la zona usada. Para UTC-3, por ejemplo: `$env:MEDIFLOW_ZONA_HORARIA = "America/Argentina/Buenos_Aires"` antes de iniciar `streamlit` |
 | 10 | Las pruebas `PRUEBA-KATE-*` quedaron en el bucket | Kate las limpia más adelante |
+| 11 | Revisión de Kimberlyn: al cambiar el ID en la consulta, queda visible el resultado anterior hasta pulsar «Consultar» (editando a mano o con el ID precargado tras un envío nuevo) | **Ajustado:** el resultado anterior se descarta al cambiar el ID. Para eso el campo del ID dejó de estar dentro de un formulario, así que Enter ya no consulta; se pulsa «Consultar». Hay dos pruebas nuevas |
 
-Los ajustes 3, 4, 5 y 9 se repitieron después contra OCI y Gemini reales (§11.1). El ajuste 7 se verificó con pruebas automatizadas y con capturas de la interfaz (API simulada).
+Los ajustes 3, 4, 5 y 9 se repitieron después contra OCI y Gemini reales (§11.1). El ajuste 7 se verificó con pruebas automatizadas y con capturas de la interfaz (API simulada). El ajuste 11 se verificó con pruebas automatizadas y a mano en el navegador.
 
 ## 13. Pendiente
 
