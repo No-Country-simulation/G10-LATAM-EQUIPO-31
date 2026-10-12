@@ -216,7 +216,7 @@ Observaciones opcionales de Kate, que se dejan sin cambios de código:
 | 2 | Un ID repetido con archivos distintos deja el resultado en `procesados/estandar` y en `procesados/revision_humana`, con dos entradas en el historial | **Corresponde al backend** (persistencia), fuera del alcance de MF-28. Queda documentado en §5. Se sugiere evaluarlo en MF-13 (persistencia) u otra actividad |
 | 3 | El PDF de 19 MB tarda más de 120 s; la API termina bien y queda en revisión humana, y reenviar por el aviso duplicaría el documento | **Ajustado:** el aviso ahora indica buscar el documento en «Consulta de resultados» (ID precargado) antes de reenviar. El tiempo se puede subir con `MEDIFLOW_TIMEOUT_CARGA` |
 | 4 | Dice «Máx. 20 MB» pero 20 MB exactos se rechaza, sin motivo visible | **Ajustado:** el texto dice «menos de 20 MB» y la validación propia usa la misma regla |
-| 5 | El aviso de API apagada menciona `uvicorn main:app`, algo técnico | **Ajustado:** el mensaje ya no lo menciona (§6) |
+| 5 | El aviso de API apagada menciona `uvicorn main:app`, algo técnico | **Ajustado en la pantalla de carga:** el mensaje ya no lo menciona (§6). La pantalla de consulta y el panel HITL usan el cliente HTTP existente (`utils_frontend.py`, MF-12), que todavía lo menciona; no se modificó aquí. Se sugiere ajustarlo allí |
 | 6 | «Datos extraídos» muestra filas vacías (tipo y número de documento, sexo) | Coherente con «Campos no encontrados» y con el panel HITL, que usa la misma función. Sin cambios |
 | 7 | Un aviso aparece repetido (motivo e inconsistencia con el mismo texto) | **Ajustado en la consulta:** se muestra una sola vez. El panel HITL existente (MF-12) lista motivos e inconsistencias por separado y tiene la misma repetición; no se modificó aquí. Se sugiere corregirlo allí |
 | 8 | Un puntaje de 0.93 queda «Alta» en el caso 001 y «Media» en el 007 | La categoría depende de más factores que el puntaje: en `confianza.py` baja de Alta a Media cuando hay inconsistencias, y los motivos del 007 incluyen una («Receta Médica» con estudios complejos). Es comportamiento intencional de la lógica de confianza (MF-10 / MF-21), no de MF-28; queda pendiente que la pantalla explique el motivo |
@@ -229,6 +229,6 @@ Los ajustes 3, 4, 5 y 9 se repitieron después contra OCI y Gemini reales (§11.
 
 - [x] Anexar `evidencia-id-repetido-listado.txt` (listado de objetos del bucket con el ID repetido, observación 2), que Kate adjuntó en su comentario del PR.
 - [x] Que Kate repita en su entorno el PDF de 19 MB y el archivo de 20 MB para ver los mensajes ajustados (hecho, ver 11.1).
-- [ ] Decidir con el equipo dónde se atienden las observaciones 2, 7 y 8, que corresponden a otras partes del sistema.
+- [ ] Decidir con el equipo dónde se atienden las observaciones 2, 5 (consulta y panel HITL), 7 y 8, que corresponden a otras partes del sistema.
 - [ ] Mejoras menores y opcionales: texto en inglés del cargador de Streamlit y dirección visible en el aviso de API apagada.
 
