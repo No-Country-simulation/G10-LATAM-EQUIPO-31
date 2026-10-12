@@ -12,7 +12,7 @@ Ofrecer una interfaz de entrada para el MVP, sin depender de Swagger como UI, us
 | Consulta de resultados | Hecho (§7) |
 | Acceso a HITL | Hecho: menú lateral hacia el panel de revisión humana (§9) |
 | Usar la API existente, sin modificarla | Cumplido: solo se consumen `POST /documentos` y `GET /documentos/{id}/historial` |
-| Validación con OCI y Gemini reales | Hecha por Kate (§11); observaciones y decisiones en §12 |
+| Validación con OCI y Gemini reales | Hecha por Kate (§11) y repetida con los ajustes aplicados (§11.1); observaciones y decisiones en §12 | 
 
 **Fuera de alcance (deliberadamente):**
 
@@ -159,8 +159,19 @@ Cubren: validación de cada formato y de cada rechazo (incluido el límite de ta
 | API apagada | [evidencia-servidor-caido.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-servidor-caido.png) | OK |
 | Archivo de 20 MB exactos bloqueado | [evidencia-archivo-20mb-bloqueado.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-archivo-20mb-bloqueado.png) | OK (con observación, §12) |
 | PDF de 19 MB: tiempo de espera agotado | [evidencia-archivo-19mb-timeout.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-archivo-19mb-timeout.png) | OK (con observación, §12) |
+| Listado del bucket con el ID repetido (`PRUEBA-KATE-010` y `PRUEBA-KATE-015`), observación 2 | [evidencia-id-repetido-listado.txt](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-id-repetido-listado.txt) | OK |
 
 Las capturas de Kate se tomaron sobre el commit `3366b79`, antes de los ajustes de §12, por lo que algunos textos (por ejemplo «Máx. 20 MB» o la mención a `uvicorn` en el aviso de API apagada) corresponden a esa versión.
+
+*Verificación final de Kate con los ajustes aplicados (ver §11.1):*
+
+| Escenario | Archivo | Estado |
+|---|---|---|
+| Resultado de `pytest` en su equipo (331 pasan) | [evidencia-verificacion-final-pytest.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-verificacion-final-pytest.png) | OK |
+| PDF de 19 MB: aviso nuevo de tiempo agotado | [evidencia-verificacion-final-19mb.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-verificacion-final-19mb.png) | OK |
+| Consulta de ese documento, con la hora en su zona | [evidencia-verificacion-final-zona-horaria.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-verificacion-final-zona-horaria.png) | OK |
+| Archivo de 20 MB bloqueado | [evidencia-verificacion-final-20mb.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-verificacion-final-20mb.png) | OK |
+| API apagada, con el mensaje ajustado | [evidencia-verificacion-final-servidor-caido.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-verificacion-final-servidor-caido.png) | OK |
 
 ## 11. Prueba con OCI y Gemini reales
 
@@ -178,6 +189,25 @@ Realizada por Kate en su entorno local, sobre el commit `3366b79`, con acceso al
 
 Además, enviado directamente a la API, `application/json` responde 415 (`Tipo de archivo no soportado`); la app lo evita enviando `.json` y `.md` como `text/plain`, y la consulta del rechazado confirma que no se guardó nada.
 
+También se comprobó que repetir un ID con archivos distintos (`PRUEBA-KATE-010`) deja el resultado en `procesados/estandar` y en `procesados/revision_humana`, con dos entradas en el historial (observación 2 de §12). El listado del bucket está en [evidencia-id-repetido-listado.txt](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-id-repetido-listado.txt).
+
+### 11.1 Verificación final con los ajustes aplicados
+
+Kate repitió en su equipo (rama `pr-58`), con OCI y Gemini reales, los casos afectados por los ajustes de la sección 12, y aprobó el PR.
+
+| Verificación | Resultado | Evidencia |
+|---|---|---|
+| Suite de pruebas | 331 pasan | `evidencia-verificacion-final-pytest.png` |
+| PDF de 19 MB (`PRUEBA-KATE-016`) | A los 120 s aparece el aviso que remite a «Consulta de resultados» con el ID precargado. El documento sí se había procesado y figura pendiente de revisión humana (confianza 0.00, Baja, esperable porque no es un documento médico) | `evidencia-verificacion-final-19mb.png` y `evidencia-verificacion-final-zona-horaria.png` |
+| Zona horaria | La hora se muestra en `America/Argentina/Buenos_Aires` con `MEDIFLOW_ZONA_HORARIA` | `evidencia-verificacion-final-zona-horaria.png` |
+| Archivo de 20 MB (`PRUEBA-KATE-017`) | Queda bloqueado y el texto dice «menos de 20 MB» | `evidencia-verificacion-final-20mb.png` |
+| API apagada (`PRUEBA-KATE-018`) | Mensaje claro y sin errores técnicos de código | `evidencia-verificacion-final-servidor-caido.png` |
+
+Observaciones opcionales de Kate, que se dejan sin cambios de código:
+
+- El cartel «File must be 20.0MB or smaller» es el aviso propio del cargador de Streamlit (el límite `maxUploadSize` de `.streamlit/config.toml` es el mismo de 20 MB) y sale en inglés.
+- El aviso de API apagada muestra `http://localhost:8000`. Se mantiene porque ayuda a ver a qué servicio apunta la app.
+
 ## 12. Observaciones de la prueba y decisión
 
 | # | Observación | Decisión |
@@ -193,10 +223,12 @@ Además, enviado directamente a la API, `application/json` responde 415 (`Tipo d
 | 9 | Las horas aparecen en UTC-5, no en la hora local de quien consulta (Kate está en UTC-3) | La zona **ya es configurable** con `MEDIFLOW_ZONA_HORARIA` (por defecto `America/Bogota`), compartida con el panel HITL. **Ajustado:** la consulta indica la zona usada. Para UTC-3, por ejemplo: `$env:MEDIFLOW_ZONA_HORARIA = "America/Argentina/Buenos_Aires"` antes de iniciar `streamlit` |
 | 10 | Las pruebas `PRUEBA-KATE-*` quedaron en el bucket | Kate las limpia más adelante |
 
-Los ajustes 3, 4, 5, 7 y 9 se verificaron con pruebas automatizadas y con capturas de la interfaz (API simulada); no se repitieron contra OCI.
+Los ajustes 3, 4, 5 y 9 se repitieron después contra OCI y Gemini reales (§11.1). El ajuste 7 se verificó con pruebas automatizadas y con capturas de la interfaz (API simulada).
 
 ## 13. Pendiente
 
 - [x] Anexar `evidencia-id-repetido-listado.txt` (listado de objetos del bucket con el ID repetido, observación 2), que Kate adjuntó en su comentario del PR.
-- [ ] Opcional: que Kate repita en su entorno el PDF de 19 MB y el archivo de 20 MB para ver los mensajes ajustados.
+- [x] Que Kate repita en su entorno el PDF de 19 MB y el archivo de 20 MB para ver los mensajes ajustados (hecho, ver 11.1).
 - [ ] Decidir con el equipo dónde se atienden las observaciones 2, 7 y 8, que corresponden a otras partes del sistema.
+- [ ] Mejoras menores y opcionales: texto en inglés del cargador de Streamlit y dirección visible en el aviso de API apagada.
+
