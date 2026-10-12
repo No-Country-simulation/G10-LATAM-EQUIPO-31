@@ -211,13 +211,13 @@ def render_consulta_resultados(clave: str = "consulta") -> None:
     """Dibuja la sección «Consultar resultado». El ID del último documento enviado desde Carga viene precargado."""
     with st.container(border=True):
         st.subheader("Consultar resultado")
-        with st.form(f"{clave}_form"):
-            documento_id = st.text_input(
-                "ID del documento",
-                value=st.session_state.get("ultimo_documento_id", ""),
-                placeholder="ej. DOC-CLIN-2026-0001",
-            )
-            consultar = st.form_submit_button("Consultar", type="primary")
+        # Sin st.form: así, al cambiar el ID la pantalla se vuelve a dibujar y puede descartar el resultado anterior.
+        documento_id = st.text_input(
+            "ID del documento",
+            value=st.session_state.get("ultimo_documento_id", ""),
+            placeholder="ej. DOC-CLIN-2026-0001",
+        )
+        consultar = st.button("Consultar", type="primary")
 
         if consultar:
             error = validar_id_consulta(documento_id)
@@ -236,6 +236,11 @@ def render_consulta_resultados(clave: str = "consulta") -> None:
 
     estado = st.session_state.get(f"{clave}_estado")
     if not estado:
+        return
+    if estado["id"] != documento_id.strip():
+        # El resultado mostrado debe corresponder al ID visible: si se cambió (a mano o por la precarga tras un
+        # envío nuevo), se descarta el anterior hasta que se pulse «Consultar».
+        st.session_state.pop(f"{clave}_estado", None)
         return
     if estado.get("no_encontrado"):
         st.warning(

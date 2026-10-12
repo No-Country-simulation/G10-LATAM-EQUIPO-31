@@ -219,3 +219,27 @@ def test_ui_aviso_repetido_aparece_una_sola_vez_y_se_indica_la_zona_horaria(monk
     assert texto.count(REPETIDO) == 1
     assert f"({u.ZONA_HORARIA})" in texto                  # «Procesado: 10/10/2026 05:00 (America/Bogota)»
     assert any(u.ZONA_HORARIA in c.value for c in at.caption)
+
+
+def _mostrando_documento(at, documento_id):
+    return f"Documento {documento_id}" in [s.value for s in at.subheader]
+
+
+def test_ui_cambiar_el_id_a_mano_oculta_el_resultado_anterior(monkeypatch):
+    monkeypatch.setattr(u, "_solicitar", lambda m, r, **k: {"eventos": [_proc("revision_humana", score=0.62, cat="Media")]})
+    at = _consultar(_abrir(), "DOC-A")
+    assert _mostrando_documento(at, "DOC-A")
+    at.text_input[0].set_value("DOC-B").run()                      # se edita el ID, sin pulsar «Consultar»
+    assert not _mostrando_documento(at, "DOC-A") and not at.metric and not at.dataframe
+    at = _consultar(at, "DOC-B")                                   # y al consultar muestra el nuevo
+    assert _mostrando_documento(at, "DOC-B")
+
+
+def test_ui_id_precargado_tras_un_envio_nuevo_oculta_el_resultado_anterior(monkeypatch):
+    monkeypatch.setattr(u, "_solicitar", lambda m, r, **k: {"eventos": [_proc("revision_humana", score=0.62, cat="Media")]})
+    at = _consultar(_abrir(precarga="DOC-A"), "DOC-A")
+    assert _mostrando_documento(at, "DOC-A")
+    at.session_state["ultimo_documento_id"] = "DOC-NUEVO"          # lo que hace la pantalla de carga tras un envío
+    at.run()
+    assert at.text_input[0].value == "DOC-NUEVO"
+    assert not _mostrando_documento(at, "DOC-A") and not at.metric and not at.dataframe
