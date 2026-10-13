@@ -95,3 +95,24 @@ def test_un_conflicto_avisa_que_otro_auditor_ya_decidio(abrir):
     _mocks().ESTADO["conflicto"] = True
     _boton(at, "✅ Aprobar").click().run()
     assert any("ya no está pendiente" in w.value for w in at.warning) and not _mocks().LLAMADAS
+
+def test_un_aviso_ya_listado_en_los_motivos_no_se_repite(abrir, monkeypatch):
+    """Los motivos de confianza ya incluyen los errores e inconsistencias; el panel no debe mostrarlos dos veces."""
+    texto = "El documento es una 'Receta Medica' pero incluye estudios complejos."
+    resultado = _mocks().PEND[0]["resultado"]
+    monkeypatch.setitem(resultado, "motivos_confianza", ["Confianza media (0.64)", texto])
+    monkeypatch.setitem(resultado, "inconsistencias", [texto])
+    monkeypatch.setitem(resultado, "errores_validacion", [texto])
+    at = abrir()
+    assert len([m for m in at.markdown if texto in m.value]) == 1
+
+
+def test_un_aviso_que_no_esta_en_los_motivos_se_sigue_mostrando(abrir, monkeypatch):
+    """La deduplicación no debe ocultar avisos que los motivos de confianza no incluyen."""
+    texto = "Falta el número de documento del paciente."
+    resultado = _mocks().PEND[0]["resultado"]
+    monkeypatch.setitem(resultado, "motivos_confianza", ["Confianza media (0.64)"])
+    monkeypatch.setitem(resultado, "inconsistencias", [texto])
+    monkeypatch.setitem(resultado, "errores_validacion", [])
+    at = abrir()
+    assert len([m for m in at.markdown if texto in m.value]) == 1

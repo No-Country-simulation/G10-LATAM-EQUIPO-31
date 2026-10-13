@@ -128,12 +128,13 @@ with tab_pend:
                     )
                 if item["justificacion_enrutamiento"]:
                     st.markdown(f"**Por qué está aquí:** {item['justificacion_enrutamiento']}")
-                for motivo in item["motivos_confianza"]:   # tal como los deja MF-10 / MF-21
+                motivos = list(item["motivos_confianza"])
+                for motivo in motivos:   # tal como los deja MF-10 / MF-21
                     st.markdown(f"- {motivo}")
-                for error in item["errores_validacion"]:
-                    st.markdown(f"- ⚠️ {error}")
-                for inconsistencia in item["inconsistencias"]:
-                    st.markdown(f"- ⚠️ {inconsistencia}")
+                # MF-10 / MF-21 ya incluye errores e inconsistencias en los motivos: solo se agregan los que falten
+                for aviso in dict.fromkeys(list(item["errores_validacion"]) + list(item["inconsistencias"])):
+                    if aviso not in motivos:
+                        st.markdown(f"- ⚠️ {aviso}")
                 if clas.get("especialidad"):
                     st.markdown(f"**Especialidad:** {clas['especialidad']}")
                 if clas.get("nivel_prioridad"):

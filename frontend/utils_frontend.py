@@ -104,7 +104,7 @@ def _solicitar(metodo: str, ruta: str, **kwargs: Any) -> Any:
         )
     except requests.exceptions.ConnectionError as exc:
         raise ErrorClienteAPI(
-            f"No hay conexión con la API en {API_BASE_URL} (¿está corriendo `uvicorn main:app`?)."
+            f"No hay conexión con la API ({API_BASE_URL}). Verifique que el servicio esté en ejecución e inténtelo de nuevo."
         ) from exc
     except requests.exceptions.Timeout as exc:
         raise ErrorClienteAPI(
