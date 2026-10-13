@@ -65,9 +65,11 @@ if st.button("🔄 Actualizar bandeja"):
 
 try:
     bandeja = _bandeja_cacheada()
+    bandeja_disponible = True
 except Exception as exc:
     st.error(f"No se pudo obtener la bandeja de revisión humana ({exc}).")
     bandeja = {"pendientes": [], "total_pendientes": 0, "resueltos": [], "avisos": []}
+    bandeja_disponible = False
 
 for aviso in bandeja["avisos"]:
     st.warning(aviso)
@@ -88,17 +90,22 @@ visibles = [
 # Urgentes primero (el orden previo, más reciente primero, se conserva dentro de cada grupo).
 visibles.sort(key=lambda i: not item_es_urgente(i))
 
-m1, m2 = st.columns(2)
-m1.metric("Pendientes de revisión", bandeja["total_pendientes"])
-m2.metric("Urgentes (en pantalla)", sum(item_es_urgente(i) for i in pendientes))
+total_pendientes = bandeja["total_pendientes"] if bandeja_disponible else "—"
+urgentes = sum(item_es_urgente(i) for i in pendientes) if bandeja_disponible else "—"
 
-tab_pend, tab_res = st.tabs([f"Pendientes ({bandeja['total_pendientes']})", "Resueltos recientemente"])
+m1, m2 = st.columns(2)
+m1.metric("Pendientes de revisión", total_pendientes)
+m2.metric("Urgentes (en pantalla)", urgentes)
+
+tab_pend, tab_res = st.tabs([f"Pendientes ({total_pendientes})", "Resueltos recientemente"])
 
 # --------------------------------------------------------------------------
 # Pestaña 1 — Pendientes
 # --------------------------------------------------------------------------
 with tab_pend:
-    if not pendientes:
+    if not bandeja_disponible:
+        st.info("La bandeja no está disponible en este momento. Cuando se restablezca la conexión, pulse «Actualizar bandeja».")
+    elif not pendientes:
         st.success("No hay documentos pendientes de revisión humana. 🎉")
     elif not visibles:
         st.info("Ningún pendiente coincide con los filtros.")
@@ -128,12 +135,13 @@ with tab_pend:
                     )
                 if item["justificacion_enrutamiento"]:
                     st.markdown(f"**Por qué está aquí:** {item['justificacion_enrutamiento']}")
-                for motivo in item["motivos_confianza"]:   # tal como los deja MF-10 / MF-21
+                motivos = list(item["motivos_confianza"])
+                for motivo in motivos:   # tal como los deja MF-10 / MF-21
                     st.markdown(f"- {motivo}")
-                for error in item["errores_validacion"]:
-                    st.markdown(f"- ⚠️ {error}")
-                for inconsistencia in item["inconsistencias"]:
-                    st.markdown(f"- ⚠️ {inconsistencia}")
+                # MF-10 / MF-21 ya incluye errores e inconsistencias en los motivos: solo se agregan los que falten
+                for aviso in dict.fromkeys(list(item["errores_validacion"]) + list(item["inconsistencias"])):
+                    if aviso not in motivos:
+                        st.markdown(f"- ⚠️ {aviso}")
                 if clas.get("especialidad"):
                     st.markdown(f"**Especialidad:** {clas['especialidad']}")
                 if clas.get("nivel_prioridad"):
@@ -230,7 +238,9 @@ with tab_pend:
 # Pestaña 2 — Resueltos recientemente
 # --------------------------------------------------------------------------
 with tab_res:
-    if not bandeja["resueltos"]:
+    if not bandeja_disponible:
+        st.info("La bandeja no está disponible en este momento. Cuando se restablezca la conexión, pulse «Actualizar bandeja».")
+    elif not bandeja["resueltos"]:
         st.info("Todavía no hay decisiones resueltas.")
     else:
         st.dataframe(
