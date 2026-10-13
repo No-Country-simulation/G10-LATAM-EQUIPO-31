@@ -116,3 +116,35 @@ def test_un_aviso_que_no_esta_en_los_motivos_se_sigue_mostrando(abrir, monkeypat
     monkeypatch.setitem(resultado, "errores_validacion", [])
     at = abrir()
     assert len([m for m in at.markdown if texto in m.value]) == 1
+
+
+def test_con_la_bandeja_caida_no_se_muestra_que_no_hay_pendientes(abrir, monkeypatch):
+    """Si no se pudo obtener la bandeja, el panel no debe afirmar que no hay documentos pendientes."""
+    mocks = _mocks()
+
+    def _sin_conexion(limite=50):
+        raise mocks.u.ErrorClienteAPI(
+            "No hay conexión con la API (http://localhost:8000). "
+            "Verifique que el servicio esté en ejecución e inténtelo de nuevo."
+        )
+
+    monkeypatch.setattr(mocks.u, "obtener_bandeja", _sin_conexion)
+    at = abrir()
+    assert any("No se pudo obtener la bandeja" in e.value for e in at.error)
+    assert not [s for s in at.success if "No hay documentos pendientes" in s.value]
+    assert [m.value for m in at.metric] == ["—", "—"]
+
+
+def test_con_la_bandeja_caida_no_se_muestra_que_no_hay_decisiones_resueltas(abrir, monkeypatch):
+    """Si no se pudo obtener la bandeja, la pestaña de resueltos no debe afirmar que no hay decisiones."""
+    mocks = _mocks()
+
+    def _sin_conexion(limite=50):
+        raise mocks.u.ErrorClienteAPI(
+            "No hay conexión con la API (http://localhost:8000). "
+            "Verifique que el servicio esté en ejecución e inténtelo de nuevo."
+        )
+
+    monkeypatch.setattr(mocks.u, "obtener_bandeja", _sin_conexion)
+    at = abrir()
+    assert not [i for i in at.info if "Todavía no hay decisiones resueltas" in i.value]
