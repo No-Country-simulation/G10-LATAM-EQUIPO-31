@@ -98,7 +98,7 @@ UMBRAL_CONFIANZA_ALTA = 0.80  # igual que UMBRAL_ALTA en app/graph/confianza.py
 
 
 def categoria_degradada_a_media(item: dict) -> bool:
-    """Puntaje de categoría Alta, pero categoría Media: el backend la baja si hay avisos o datos críticos faltantes."""
+    """Puntaje de categoría Alta, pero categoría Media: el backend la baja si hay errores, inconsistencias o falta de medicamentos, diagnósticos, estudios o profesional."""
     score = item["score_confianza_final"]
     return (
         isinstance(score, (int, float))
@@ -171,9 +171,10 @@ def _mostrar_documento(documento_id: str, eventos: list[dict[str, Any]], clave: 
         st.caption(
             f"La categoría es Media aunque el puntaje ({score:.2f}) alcanza el umbral de Alta "
             f"({UMBRAL_CONFIANZA_ALTA:.2f}): no pasa a Alta si hay errores de validación, "
-            "inconsistencias o datos críticos faltantes. Los motivos se listan más abajo."
+            "inconsistencias o falta de medicamentos, diagnósticos, estudios o profesional. "
+            "Los motivos se listan más abajo."
         )
-
+    
     col_a, col_b = st.columns(2)
     with col_a:
         st.markdown(f"**Tipo de documento:** {item['tipo_documento']}")

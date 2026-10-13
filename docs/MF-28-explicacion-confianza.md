@@ -22,7 +22,9 @@ Atender la observación 8 de la revisión de MF-28: un puntaje de 0.93 aparece c
 
 ## 3. Cómo funciona
 
-Cuando el puntaje es igual o mayor a 0,80 y la categoría es Media, la consulta muestra una nota con el puntaje y el umbral de Alta. La nota explica que la categoría no pasa a Alta si hay errores de validación, inconsistencias o datos críticos faltantes, y remite a los motivos que se listan debajo.
+Cuando el puntaje es igual o mayor a 0,80 y la categoría es Media, la consulta muestra una nota con el puntaje y el umbral de Alta. La nota explica que la categoría no pasa a Alta si hay errores de validación, inconsistencias o falta de medicamentos, diagnósticos, estudios o profesional, y remite a los motivos que se listan debajo.
+
+Los datos del paciente que falten (nombre, fecha, sexo) solo restan puntaje y no cambian la categoría, por eso la nota no los menciona.
 
 No aparece cuando la categoría es Alta, cuando el puntaje es menor a 0,80 o cuando no hay puntaje.
 
