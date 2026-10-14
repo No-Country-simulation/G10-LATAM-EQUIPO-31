@@ -49,16 +49,19 @@ El formato **no se elige a mano**: se deduce del archivo (extensión y contenido
 | `.pdf` | PDF | `application/pdf` |
 | `.json` | JSON | `text/plain` |
 | `.md`, `.markdown` | Markdown | `text/plain` |
+| `.txt` | TXT | `text/plain` |
 
-JSON y Markdown viajan como `text/plain` porque `POST /documentos` solo acepta `text/*`, `application/pdf` e `image/*`: con `application/json` la API responde 415 (hay una prueba que lo documenta y la prueba con OCI lo confirmó, §11).
+JSON, Markdown y TXT viajan como `text/plain` porque `POST /documentos` solo acepta `text/*`, `application/pdf` e `image/*`: con `application/json` la API responde 415 (hay una prueba que lo documenta y la prueba con OCI lo confirmó, §11).
 
 Nota: el backend etiqueta todo `text/*` con `tipo_archivo = "JSON"` (comentario temporal en `routes.py`, pendiente del contrato de MF-02). Un `.md` se procesa igual que un `.txt`, pero queda marcado como «JSON» en el documento persistido. No afecta el procesamiento ni la consulta, y no se modifica en MF-28.
+
+Actualización (MF-72): se añadió `.txt` a los formatos aceptados; ver [MF-72](./MF-72-soporte-txt.md). Las pruebas y evidencias de este documento corresponden al estado de MF-28 y no se modificaron.
 
 ## 4. Carga: validaciones en la interfaz
 
 Antes de enviar, y con el botón «Enviar al pipeline» bloqueado mientras el archivo no sea válido:
 
-- **Formato no válido:** muestra *«Formato o tipo de archivo no válido (.docx) en "informe.docx". Formatos permitidos: JPG, PNG, PDF, JSON y Markdown (…)»*.
+- **Formato no válido:** muestra *«Formato o tipo de archivo no válido (.docx) en "informe.docx". Formatos permitidos: JPG, PNG, PDF, JSON, Markdown y TXT (…)»*.
 - Archivo vacío o que **no pese menos de 20 MB** (`maxUploadSize` de `.streamlit/config.toml`, variable `MEDIFLOW_MAX_MB_CARGA`). El cargador de Streamlit rechaza por sí mismo los archivos de exactamente 20 MB, por eso el texto dice «menos de 20 MB».
 - Contenido que no coincide con la extensión (por ejemplo, un `.txt` renombrado a `.pdf`).
 - JSON mal formado (indica línea y columna) y texto que no esté en UTF-8.
