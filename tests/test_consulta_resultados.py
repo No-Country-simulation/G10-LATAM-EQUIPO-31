@@ -243,3 +243,36 @@ def test_ui_id_precargado_tras_un_envio_nuevo_oculta_el_resultado_anterior(monke
     at.run()
     assert at.text_input[0].value == "DOC-NUEVO"
     assert not _mostrando_documento(at, "DOC-A") and not at.metric and not at.dataframe
+
+
+def test_categoria_degradada_a_media_solo_cuando_el_puntaje_alcanza_el_umbral_de_alta():
+    assert cr.categoria_degradada_a_media({"score_confianza_final": 0.93, "categoria_confianza": "Media"})
+    assert cr.categoria_degradada_a_media({"score_confianza_final": 0.80, "categoria_confianza": "Media"})
+    assert not cr.categoria_degradada_a_media({"score_confianza_final": 0.93, "categoria_confianza": "Alta"})
+    assert not cr.categoria_degradada_a_media({"score_confianza_final": 0.64, "categoria_confianza": "Media"})
+    assert not cr.categoria_degradada_a_media({"score_confianza_final": None, "categoria_confianza": "Media"})
+
+
+def test_umbral_de_confianza_alta_coincide_con_el_backend():
+    """Si el backend cambia el umbral, la explicación de la pantalla dejaría de ser cierta."""
+    from app.graph.confianza import UMBRAL_ALTA
+    assert cr.UMBRAL_CONFIANZA_ALTA == UMBRAL_ALTA
+
+def _hay_explicacion_de_categoria(at):
+    return any("La categoría es Media aunque el puntaje" in c.value for c in at.caption)
+
+
+def test_ui_explica_por_que_la_categoria_es_media_con_puntaje_alto(monkeypatch):
+    monkeypatch.setattr(u, "_solicitar", lambda m, r, **k: {"eventos": [_proc("revision_humana", score=0.93, cat="Media")]})
+    at = _consultar(_abrir(), "DOC-1")
+    assert not at.exception, at.exception
+    assert [m.value for m in at.metric][2] == "0.93 · Media"
+    assert _hay_explicacion_de_categoria(at)
+
+
+def test_ui_no_explica_la_categoria_cuando_no_hubo_degradacion(monkeypatch):
+    for score, cat in [(0.93, "Alta"), (0.64, "Media")]:
+        monkeypatch.setattr(u, "_solicitar", lambda m, r, s=score, c=cat, **k: {"eventos": [_proc("estandar", score=s, cat=c)]})
+        at = _consultar(_abrir(), "DOC-1")
+        assert not at.exception, at.exception
+        assert not _hay_explicacion_de_categoria(at), (score, cat)
