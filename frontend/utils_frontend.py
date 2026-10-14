@@ -5,7 +5,7 @@ Cliente HTTP del panel de revisión humana (HITL) y utilidades de presentación.
 la API de MediFlow (GET /auditoria/bandeja, GET /documentos/{id}/historial, POST /auditoria/{id}/decision):
 las credenciales de OCI quedan en el servidor y el panel no las necesita.
 
-Variables de entorno: MEDIFLOW_API_URL (http://localhost:8000) · MEDIFLOW_ZONA_HORARIA (America/Bogota)
+Variables de entorno: MEDIFLOW_API_URL (http://127.0.0.1:8000) · MEDIFLOW_ZONA_HORARIA (America/Bogota)
 · MEDIFLOW_MAX_COLA (50).
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-API_BASE_URL = os.getenv("MEDIFLOW_API_URL", "http://localhost:8000")
+API_BASE_URL = os.getenv("MEDIFLOW_API_URL", "http://127.0.0.1:8000")
 TIMEOUT_CONEXION = 10
 TIMEOUT_CONSULTA = 15
 MAX_COLA = int(os.getenv("MEDIFLOW_MAX_COLA", "50"))

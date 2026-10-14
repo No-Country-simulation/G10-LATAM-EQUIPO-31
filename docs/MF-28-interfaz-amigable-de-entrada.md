@@ -206,7 +206,7 @@ Kate repitió en su equipo (rama `pr-58`), con OCI y Gemini reales, los casos af
 Observaciones opcionales de Kate, que se dejan sin cambios de código:
 
 - El cartel «File must be 20.0MB or smaller» es el aviso propio del cargador de Streamlit (el límite `maxUploadSize` de `.streamlit/config.toml` es el mismo de 20 MB) y sale en inglés.
-- El aviso de API apagada muestra `http://localhost:8000`. Se mantiene porque ayuda a ver a qué servicio apunta la app.
+- El aviso de API apagada muestra `http://127.0.0.1:8000`. Se mantiene porque ayuda a ver a qué servicio apunta la app.
 
 ## 12. Observaciones de la prueba y decisión
 
