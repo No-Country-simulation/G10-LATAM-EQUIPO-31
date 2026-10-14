@@ -51,10 +51,10 @@ Carpeta `docs/assets/sprint-4/mf-28-interfaz-entrada/`:
 
 | Escenario | Archivo | Estado |
 |---|---|---|
-| Consulta con categoría Media y puntaje ≥ 0,80 (nota visible) | [evidencia-consulta-explicacion-categoria.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-consulta-explicacion-categoria.png) | OK (datos de ejemplo) |
+| Consulta con categoría Media y puntaje ≥ 0,80 (nota visible) | [evidencia-consulta-explicacion-categoria.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-consulta-explicacion-categoria.png) | OK |
 | Resultado de `pytest` (342 pasan) | [evidencia-verificacion-pytest-342.png](./assets/sprint-4/mf-28-interfaz-entrada/evidencia-verificacion-pytest-342.png) | OK |
 
-La captura de la consulta se tomó con un resultado simulado (puntaje 0.93, categoría Media, ID `PRUEBA-KATE-007`) porque el entorno local no dispone de credenciales de OCI. La captura de `pytest` es real.
+La captura de la consulta corresponde al documento `PRUEBA-KATE-007` con la API y OCI reales, y la aportó @ksegovia81 durante la revisión. La captura de `pytest` es del entorno local.
 
 ## 7. Cómo probarlo
 
