@@ -139,7 +139,7 @@ uvicorn main:app --port 8000                              # terminal 1 (necesita
 streamlit run frontend/panel_hitl.py --server.port 8502   # terminal 2
 ```
 
-Variables del panel: `MEDIFLOW_API_URL` (por defecto `http://localhost:8000`), `MEDIFLOW_ZONA_HORARIA` (`America/Bogota`), `MEDIFLOW_MAX_COLA` (50).
+Variables del panel: `MEDIFLOW_API_URL` (por defecto `http://127.0.0.1:8000`), `MEDIFLOW_ZONA_HORARIA` (`America/Bogota`), `MEDIFLOW_MAX_COLA` (50).
 
 ## 11. Evidencias
 
