@@ -1,0 +1,23 @@
+*** DOCUMENTO FICTICIO PARA PRUEBAS - NO CORRESPONDE A UN PACIENTE REAL ***
+
+CLINICA DEMO MEDIFLOW
+RECETA MEDICA
+
+Fecha: 12/03/2026
+Tipo de documento del paciente: Cedula de identidad
+Numero de documento: 00000001
+Paciente: Ana Perez Ficticia
+Edad: 52 anios
+Sexo: Femenino
+
+Diagnostico: Hipertension arterial esencial (I10)
+
+Indicaciones:
+1. Losartan 50 mg, un comprimido por via oral cada 24 horas, por 30 dias.
+2. Hidroclorotiazida 25 mg, un comprimido por via oral cada manana, por 30 dias.
+
+Control en 30 dias. Paciente estable, sin signos de alarma.
+
+Profesional: Dr. Luis Ramirez Demo
+Especialidad: Medicina interna
+Matricula: DEMO-0001

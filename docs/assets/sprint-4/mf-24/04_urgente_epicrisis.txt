@@ -1,0 +1,24 @@
+*** DOCUMENTO FICTICIO PARA PRUEBAS - NO CORRESPONDE A UN PACIENTE REAL ***
+
+CLINICA DEMO MEDIFLOW
+EPICRISIS - INFORME DE ALTA - CASO URGENTE
+
+Fecha: 16/03/2026
+Tipo de documento del paciente: Cedula de identidad
+Numero de documento: 00000004
+Paciente: Jorge Ruiz Ficticio
+Edad: 68 anios
+Sexo: Masculino
+
+Motivo de ingreso: dolor toracico opresivo de inicio subito, con sudoracion y disnea.
+Diagnostico: Infarto agudo de miocardio con elevacion del ST (I21.0).
+NIVEL DE URGENCIA: EMERGENCIA. Requiere atencion inmediata y seguimiento
+cardiologico prioritario en las proximas 24 horas.
+
+Tratamiento indicado al alta:
+1. Acido acetilsalicilico 100 mg, un comprimido por via oral cada 24 horas.
+2. Atorvastatina 40 mg, un comprimido por via oral cada noche.
+
+Profesional: Dra. Elena Vargas Demo
+Especialidad: Cardiologia
+Matricula: DEMO-0004

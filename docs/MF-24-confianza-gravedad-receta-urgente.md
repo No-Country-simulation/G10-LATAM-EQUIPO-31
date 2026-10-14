@@ -152,9 +152,4 @@ Se registrarán como bugs o actividades propias (IDs desde MF-32):
 | Hallazgo | Severidad | Detalle |
 |---|---|---|
 | `caso-urgente.png` se clasifica como estándar con confianza alta | Crítica | Falso negativo de urgencia: sin urgencia detectada no hay alerta |
-| `caso-estandar.pdf` termina en revisión humana | Alta | El clasificador lo tipa como "Orden de Solicitud de Procedimiento"; la matriz de MF-21 exige procedimientos y la categoría baja a Media (relacionado con MF-25) |
 | `p10.jpg` (paciente masculino embarazado) pasa como estándar con confianza 0.99 | Alta | La validación de consistencia no cubre contradicciones clínicas como esta |
-| Fallo técnico del clasificador deja `urgente=False` | Media | Un caso urgente con fallo técnico no genera alerta (observado en una corrida con claves mal configuradas) |
-| La API responde 415 a archivos `.json` | Media | El MVP lista JSON como entrada |
-| `senales_gravedad` en documentos no urgentes contiene frases tranquilizadoras o diagnósticos | Baja | No afecta, porque no generan alerta |
-| Fallos de Slack/correo no se ven en el resultado de la ejecución | Baja | Consecuencia de `On Error: Continue` y `Respond: Immediately` |

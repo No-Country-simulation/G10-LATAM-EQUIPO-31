@@ -1,0 +1,7 @@
+*** DOCUMENTO FICTICIO PARA PRUEBAS - NO CORRESPONDE A UN PACIENTE REAL ***
+*** Caso disenado para provocar baja confianza (datos faltantes y ambiguos) ***
+
+nota rapida paciente viene con malestar, revisar. algo de tos?
+tomar lo de siempre. volver si sigue igual
+
+firma ilegible

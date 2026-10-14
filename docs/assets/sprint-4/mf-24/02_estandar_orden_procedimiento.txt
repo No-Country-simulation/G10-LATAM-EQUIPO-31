@@ -1,0 +1,21 @@
+*** DOCUMENTO FICTICIO PARA PRUEBAS - NO CORRESPONDE A UN PACIENTE REAL ***
+
+CLINICA DEMO MEDIFLOW
+ORDEN DE SOLICITUD DE PROCEDIMIENTO
+
+Fecha: 14/03/2026
+Tipo de documento del paciente: Cedula de identidad
+Numero de documento: 00000002
+Paciente: Carlos Mora Ficticio
+Edad: 61 anios
+Sexo: Masculino
+
+Diagnostico: Gonartrosis de rodilla derecha (M17.1)
+
+Procedimiento solicitado: Artroscopia diagnostica de rodilla derecha.
+Justificacion: dolor cronico y limitacion funcional que no mejora con tratamiento conservador.
+Prioridad: programada, sin caracter de urgencia.
+
+Profesional solicitante: Dra. Marta Gil Demo
+Especialidad: Traumatologia
+Matricula: DEMO-0002

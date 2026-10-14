@@ -1,0 +1,20 @@
+*** DOCUMENTO FICTICIO PARA PRUEBAS - NO CORRESPONDE A UN PACIENTE REAL ***
+
+CLINICA DEMO MEDIFLOW
+CERTIFICADO MEDICO
+
+Fecha: 15/03/2026
+Tipo de documento del paciente: Cedula de identidad
+Numero de documento: 00000003
+Paciente: Laura Soto Ficticia
+Edad: 34 anios
+Sexo: Femenino
+
+Se certifica que la paciente fue evaluada en consulta y presenta
+diagnostico de faringoamigdalitis aguda (J03.9).
+Se indica reposo domestico por 3 dias a partir de la fecha.
+No presenta signos de gravedad.
+
+Profesional: Dr. Pablo Nunez Demo
+Especialidad: Medicina general
+Matricula: DEMO-0003
