@@ -61,6 +61,15 @@ MATRIZ_CRITICIDAD_VARIABLE: dict[DocumentType, set[str]] = {
     DocumentType.CERTIFICADO_MEDICO: set(),
 }
  
+# MF-25: el clasificador define la orden como "solicitud de un estudio/procedimiento".
+# Una orden que solicita estudios (laboratorio, imagenes) y no procedimientos no debe
+# penalizarse: para ese tipo, estudios_solicitados cubre a procedimientos_solicitados.
+ENTIDADES_EQUIVALENTES: dict[DocumentType, dict[str, tuple[str, ...]]] = {
+    DocumentType.ORDEN_SOLICITUD_PROCEDIMIENTO: {
+        "procedimientos_solicitados": ("estudios_solicitados",),
+    },
+}
+
 ENTIDADES_SIEMPRE_CRITICAS = {"diagnosticos"}  # paciente/profesional se tratan aparte (ver abajo)
 ENTIDADES_NUNCA_CRITICAS: set[str] = set()  # ya no queda ninguna fija en "nunca crítico"
  
@@ -88,6 +97,9 @@ def _entidades_lista_faltantes_criticas(extraccion, tipo_documento) -> list[str]
             continue
         valor = getattr(extraccion, entidad, None)
         if not valor and entidad in requeridas:
+            equivalentes = ENTIDADES_EQUIVALENTES.get(tipo_documento, {}).get(entidad, ())
+            if any(getattr(extraccion, eq, None) for eq in equivalentes):
+                continue
             faltantes.append(entidad)
     return faltantes
  
