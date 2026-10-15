@@ -39,6 +39,9 @@ PDF = b"%PDF-1.7\n%resto del pdf"
         ("datos.json", b'{"paciente": "Ana"}', "JSON", "text/plain"),
         ("nota.md", "# Informe\ncafé".encode("utf-8"), "Markdown", "text/plain"),
         ("nota.markdown", b"# Informe", "Markdown", "text/plain"),
+    ("nota.txt", "Informe café".encode("utf-8"), "TXT", "text/plain"),
+    ("con_bom.txt", b"\xef\xbb\xbfPaciente: Ana", "TXT", "text/plain"),
+    ("no_es_json.txt", b"{esto no es json", "TXT", "text/plain"),
         ("con_bom.json", b'\xef\xbb\xbf{"a": 1}', "JSON", "text/plain"),
     ],
 )
@@ -48,12 +51,12 @@ def test_formatos_validos(nombre, contenido, formato, mime):
     assert (v.formato, v.mime) == (formato, mime)
 
 
-@pytest.mark.parametrize("nombre", ["informe.docx", "hoja.xlsx", "nota.txt", "foto.gif", "ruta.exe", "sinextension", "archivo."])
+@pytest.mark.parametrize("nombre", ["informe.docx", "hoja.xlsx", "foto.gif", "ruta.exe", "sinextension", "archivo."])
 def test_formato_no_valido_lista_los_formatos_permitidos(nombre):
     v = ca.validar_archivo(nombre, b"contenido")
     assert not v.ok
     assert "no válido" in v.error
-    for permitido in ("JPG", "PNG", "PDF", "JSON", "Markdown"):
+    for permitido in ("JPG", "PNG", "PDF", "JSON", "Markdown", "TXT"):
         assert permitido in v.error
 
 
@@ -194,6 +197,7 @@ def test_sin_conexion_y_timeout(monkeypatch):
     [
         ("a.jpg", JPG), ("a.png", PNG), ("a.pdf", PDF),
         ("a.json", json.dumps({"paciente": "Ana"}).encode()), ("a.md", "# Nota".encode()),
+        ("a.txt", "Paciente: Ana. Dolor torácico.".encode("utf-8")),
     ],
 )
 def test_contrato_backend_acepta_cada_formato_permitido(monkeypatch, nombre, contenido):
@@ -260,7 +264,7 @@ def test_ui_formato_no_valido_muestra_aviso_con_la_lista_y_bloquea_el_envio():
     at.file_uploader[0].upload("informe.docx", b"PK\x03\x04 contenido").run()
     assert not at.exception, at.exception
     assert len(at.error) == 1
-    assert "no válido" in at.error[0].value and "JPG, PNG, PDF, JSON y Markdown" in at.error[0].value
+    assert "no válido" in at.error[0].value and "JPG, PNG, PDF, JSON, Markdown y TXT" in at.error[0].value
     assert _boton_enviar(at).disabled
 
 
@@ -319,3 +323,24 @@ def test_ui_timeout_precarga_el_id_en_la_consulta_y_no_pierde_el_formulario(monk
     assert any("No se pudo confirmar el envío" in e.value and "Consulta de resultados" in e.value for e in at.error)
     assert at.session_state["ultimo_documento_id"] == "PRUEBA-LENTO-001"   # la consulta lo trae escrito
     assert at.file_uploader[0].value is not None
+
+# ---- MF-72: soporte de .txt ----
+
+def test_txt_latin1_se_rechaza():
+    v = ca.validar_archivo("latin.txt", "información".encode("latin-1"))
+    assert not v.ok
+
+
+def test_txt_vacio_o_solo_espacios_se_rechaza():
+    assert not ca.validar_archivo("vacio.txt", b"").ok
+    assert not ca.validar_archivo("blanco.txt", b"  \n \n").ok
+
+
+def test_png_falso_sigue_rechazandose():
+    assert not ca.validar_archivo("falso.png", b"texto renombrado a png").ok
+
+
+def test_formatos_no_permitidos_siguen_rechazandose():
+    for nombre in ("a.exe", "a.docx", "a.csv", "a.txt.exe"):
+        assert not ca.validar_archivo(nombre, b"contenido").ok
+

@@ -4,7 +4,7 @@ frontend.carga_archivos
 Sección «Enviar documento»: carga un archivo al pipeline de MediFlow (POST /documentos de la API).
 
 El formato NO se elige a mano: se deduce del propio archivo (extensión + contenido). Se aceptan solo
-JPG, PNG, PDF, JSON y Markdown; cualquier otro se rechaza con un aviso que lista los formatos válidos.
+JPG, PNG, PDF, JSON, Markdown y TXT; cualquier otro se rechaza con un aviso que lista los formatos válidos.
 
 Es un módulo nuevo e independiente: no modifica el panel HITL ni la API. Usa solo lo que ya existe
 (`API_BASE_URL`, la sesión HTTP y `ErrorClienteAPI` de utils_frontend) y envía el archivo por el mismo
@@ -49,8 +49,9 @@ FORMATOS: dict[str, tuple[str, str]] = {
     "json": ("JSON", "text/plain"),
     "md": ("Markdown", "text/plain"),
     "markdown": ("Markdown", "text/plain"),
+    "txt": ("TXT", "text/plain"),
 }
-LISTA_FORMATOS = "JPG, PNG, PDF, JSON y Markdown (.jpg, .jpeg, .png, .pdf, .json, .md, .markdown)"
+LISTA_FORMATOS = "JPG, PNG, PDF, JSON, Markdown y TXT (.jpg, .jpeg, .png, .pdf, .json, .md, .markdown, .txt)"
 
 _FIRMA_PNG = b"\x89PNG\r\n\x1a\n"
 _FIRMA_JPG = b"\xff\xd8\xff"
@@ -73,7 +74,7 @@ class TiempoAgotadoCarga(ErrorClienteAPI):
 class ValidacionArchivo:
     ok: bool
     error: str | None = None
-    formato: str | None = None   # "JPG" | "PNG" | "PDF" | "JSON" | "Markdown"
+    formato: str | None = None   # "JPG" | "PNG" | "PDF" | "JSON" | "Markdown" | "TXT"
     mime: str | None = None      # Content-Type a enviar a la API
 
 
@@ -109,7 +110,7 @@ def validar_archivo(nombre: str, contenido: bytes, max_mb: int = MAX_MB_CARGA) -
             f"Formatos permitidos: {LISTA_FORMATOS}."
         )
 
-    if formato in ("JSON", "Markdown"):
+    if formato in ("JSON", "Markdown", "TXT"):
         try:
             texto = contenido.decode("utf-8-sig")  # el backend decodifica los textos como UTF-8
         except UnicodeDecodeError:
