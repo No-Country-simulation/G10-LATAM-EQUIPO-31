@@ -26,7 +26,7 @@ Se ejecutó la suite completa del proyecto sobre la rama de integración.
 
 **Resultado: 361 pruebas aprobadas en 39.18 segundos.**
 
-![Suite automatizada — 361 pruebas](assets/sprint-4/MF-31/MF-31-01-suite-pruebas-automatizadas.png)
+![Suite automatizada — 361 pruebas](assets/sprint-4/mf-31/MF-31-01-suite-pruebas-automatizadas.png)
 
 ---
 
@@ -46,7 +46,7 @@ Se procesó una receta médica mediante la interfaz de Streamlit.
 
 El documento se procesó correctamente sin requerir revisión humana.
 
-![Escenario estándar PDF](assets/sprint-4/MF-31/MF-31-02-escenario-estandar-pdf.png)
+![Escenario estándar PDF](assets/sprint-4/mf-31/MF-31-02-escenario-estandar-pdf.png)
 
 ---
 
@@ -59,7 +59,7 @@ Se utilizó una orden de procedimiento en formato imagen para validar la capacid
 
 El documento siguió el flujo estándar, con confianza Alta y destino de auditoría/autorizaciones.
 
-![Escenario estándar JPG](assets/sprint-4/MF-31/MF-31-03-escenario-estandar-jpg.png)
+![Escenario estándar JPG](assets/sprint-4/mf-31/MF-31-03-escenario-estandar-jpg.png)
 
 ---
 
@@ -78,13 +78,13 @@ El documento contiene un diagnóstico de tromboembolismo pulmonar agudo.
 - Prioridad: urgente.
 - Enrutamiento: cola de emergencia.
 
-![Escenario urgente](assets/sprint-4/MF-31/MF-31-04-escenario-urgente.png)
+![Escenario urgente](assets/sprint-4/mf-31/MF-31-04-escenario-urgente.png)
 
 ### Alerta en Slack
 
 Se realizó la verificación del mecanismo de notificación asociado al procesamiento urgente.
 
-![Alerta en Slack](assets/sprint-4/MF-31/MF-31-05-alerta-slack.png)
+![Alerta en Slack](assets/sprint-4/mf-31/MF-31-05-alerta-slack.png)
 
 ---
 
@@ -96,7 +96,7 @@ Se utilizó un documento previamente procesado y pendiente de revisión humana.
 
 El caso permitió verificar su disponibilidad en la bandeja HITL y consultar los motivos que requieren intervención del auditor.
 
-![Documento pendiente de revisión humana](assets/sprint-4/MF-31/MF-31-06-escenario-hitl.png)
+![Documento pendiente de revisión humana](assets/sprint-4/mf-31/MF-31-06-escenario-hitl.png)
 
 ### Decisiones de aprobación y rechazo
 
@@ -111,7 +111,7 @@ La tabla de casos resueltos permite consultar:
 - Tipo documental.
 - Usuario auditor y fecha.
 
-![Historial de decisiones HITL](assets/sprint-4/MF-31/MF-31-07-historial-decisiones-hitl.png)
+![Historial de decisiones HITL](assets/sprint-4/mf-31/MF-31-07-historial-decisiones-hitl.png)
 
 ---
 
@@ -119,7 +119,7 @@ La tabla de casos resueltos permite consultar:
 
 Se verificó el almacenamiento de los resultados procesados en OCI Object Storage, utilizando el documento urgente como caso de referencia.
 
-![Persistencia en OCI](assets/sprint-4/MF-31/MF-31-08-persistencia-oci.png)
+![Persistencia en OCI](assets/sprint-4/mf-31/MF-31-08-persistencia-oci.png)
 
 ---
 
@@ -133,7 +133,7 @@ Se consultó la línea de tiempo del documento urgente.
 - Estado: urgente.
 - Confianza: Alta.
 
-![Historial del documento](assets/sprint-4/MF-31/MF-31-09-historial-documento.png)
+![Historial del documento](assets/sprint-4/mf-31/MF-31-09-historial-documento.png)
 
 ---
 
