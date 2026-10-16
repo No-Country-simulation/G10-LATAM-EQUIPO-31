@@ -163,9 +163,9 @@ Kate realizó 19 corridas por la API (`POST /documentos`) y 9 por la pantalla de
 
 | Hallazgo | Documento | Resultado observado | Impacto / seguimiento |
 |---|---|---|---|
-| K01 — Variación de señales de gravedad | `02_informe_estudio.txt` | Se obtuvieron dos señales en algunas corridas y una en otras. Se mantuvieron el destino urgente y la confianza Alta 0.93. | Bajo. Registrar variación; evitar prometer una cantidad fija de señales. |
+| K01 — Variación de señales de gravedad | `02_informe_estudio.txt` | Se obtuvieron dos señales en algunas corridas y una en otras. Se mantuvieron el destino cola_urgencias_medicas y la confianza Alta 0.93.| Bajo. Registrar variación; evitar prometer una cantidad fija de señales. |
 | K02 — Visualización incompleta en Consulta | `02_informe_estudio.txt` | La pantalla no muestra el departamento de destino de los urgentes ni las señales de gravedad; estas últimas están disponibles en el JSON técnico. | Medio para la demo. Posible mejora de interfaz; pendiente de evaluar si requiere tarea. |
-| K03 — Tipo de archivo TXT | `01_receta_medica.txt` | El historial identifica el archivo como «JSON», en lugar de «TXT» o «Texto». | Bajo. Limitación de visualización conocida en MF-28. |
+| K03 — Tipo de archivo TXT | `01_receta_medica.txt` | El campo tipo_archivo del historial de la API registra el valor «JSON», mientras que la pantalla de Carga de Streamlit muestra text/plain. Se documenta la diferencia entre ambas representaciones. | Bajo. Limitación de visualización conocida en MF-28. |
 | K04 — Variación de confianza y señal de gravedad | `caso-ambiguo.pdf` | En tres corridas se obtuvo `revision_humana`, con confianza Media 0.93 / 0.88 / 0.93. La frase «Urgencia: no urgente» apareció como señal de gravedad. | Bajo. El destino fue estable; queda registrada la inconsistencia en el puntaje y las señales. |
 | K05 — Variación de enrutamiento | `07_informe_estudio.png` | En cuatro corridas, tres derivaron a `revision_humana` (Media 0.88) y una a urgente directo (Alta 0.93). | Medio. No se propone como documento definitivo para la demo por su comportamiento variable. |
 
@@ -212,7 +212,7 @@ Las evidencias se incorporarán progresivamente conforme se organicen las captur
 | `caso-urgente.png` | Captura del resultado de clasificación como no urgente. | ![Clasificación inesperada de caso-urgente.png](assets/sprint-4/MF-26/caso-urgente-clasificacion.png) |
 | `p10.jpg` | Documento original y resultado donde no se identifica la contradicción clínica. | **[Pendiente: evidencia de p10.jpg — hallazgo reportado por Jennifer]** |
 | `caso-urgente-inferido.jpg` | Captura de detección de emergencia y alerta recibida. | **Documento utilizado:** [caso-urgente-inferido.jpg](assets/sprint-4/MF-26/caso-urgente-inferido.jpg) ![Alerta de emergencia](assets/sprint-4/MF-26/caso-urgente-inferido-alerta.png) |
-| Reporte clínico urgente 2D | Resultado en Consulta y alerta de Slack. | **Documento utilizado:** [reporte-urgente-2d.png](assets/sprint-4/MF-26/reporte-urgente-inferido-2d.png) ![Alerta del reporte urgente 2D](assets/sprint-4/MF-26/reporte-urgente-2d-alerta.png) |
+| Reporte clínico urgente 2D | Resultado en Consulta y alerta de Slack. | **Documento utilizado:** [reporte-urgente-inferido-2d.png](assets/sprint-4/MF-26/reporte-urgente-inferido-2d.png) ![Alerta del reporte urgente 2D](assets/sprint-4/MF-26/reporte-urgente-2d-alerta.png) |
 | Aprobación y rechazo HITL | Capturas de las decisiones registradas y consultadas. | **Aprobación HITL:** ![Aprobación registrada](assets/sprint-4/MF-26/hitl-aprobacion.png) **Rechazo HITL:** ![Rechazo registrado](assets/sprint-4/MF-26/hitl-rechazo.png) |
 | `DOC-TEST-MF11-X` | Captura de Slack con confianza y señales de gravedad vacías. | **Actividad relacionada:** MF-24 ![Alerta generada durante pytest](assets/sprint-4/MF-26/mf24-alerta-pytest-slack.png) |
 | Optimización de conexión local de Streamlit (MF-33) | Mediciones antes y después del ajuste de `127.0.0.1`, con 342 pruebas satisfactorias reportadas por Mauricio. | **[Pendiente: evidencias de Mauricio en MF-33 / Issue #69]** |
