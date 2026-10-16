@@ -2,7 +2,7 @@
 
 **Actividad:** MF-26 — Pruebas y validación del flujo  
 **Estado:** En progreso  
-**Participantes:** Equipo MediFlow. Pruebas y hallazgos registrados por Kimberlyn y Jennifer.
+**Participantes:** Equipo MediFlow. Pruebas y hallazgos registrados por Kimberlyn, Jennifer y Kate.
 
 ## 1. Objetivo
 
@@ -157,6 +157,22 @@ La mejora representa una reducción aproximada de 10 segundos en el escenario ev
 
 **Seguimiento:** MF-33 fue implementada e integrada mediante pull request.
 
+### Pruebas adicionales de MF-29 — Kate
+
+Kate realizó 19 corridas por la API (`POST /documentos`) y 9 por la pantalla de Carga de Streamlit, registrando cinco hallazgos en el issue de MF-26 (#62). Los resultados detallados y los pasos de reproducción se encuentran en su planilla adjunta y en la documentación de MF-29.
+
+| Hallazgo | Documento | Resultado observado | Impacto / seguimiento |
+|---|---|---|---|
+| K01 — Variación de señales de gravedad | `02_informe_estudio.txt` | Se obtuvieron dos señales en algunas corridas y una en otras. Se mantuvieron el destino urgente y la confianza Alta 0.93. | Bajo. Registrar variación; evitar prometer una cantidad fija de señales. |
+| K02 — Visualización incompleta en Consulta | `02_informe_estudio.txt` | La pantalla no muestra el departamento de destino de los urgentes ni las señales de gravedad; estas últimas están disponibles en el JSON técnico. | Medio para la demo. Posible mejora de interfaz; pendiente de evaluar si requiere tarea. |
+| K03 — Tipo de archivo TXT | `01_receta_medica.txt` | El historial identifica el archivo como «JSON», en lugar de «TXT» o «Texto». | Bajo. Limitación de visualización conocida en MF-28. |
+| K04 — Variación de confianza y señal de gravedad | `caso-ambiguo.pdf` | En tres corridas se obtuvo `revision_humana`, con confianza Media 0.93 / 0.88 / 0.93. La frase «Urgencia: no urgente» apareció como señal de gravedad. | Bajo. El destino fue estable; queda registrada la inconsistencia en el puntaje y las señales. |
+| K05 — Variación de enrutamiento | `07_informe_estudio.png` | En cuatro corridas, tres derivaron a `revision_humana` (Media 0.88) y una a urgente directo (Alta 0.93). | Medio. No se propone como documento definitivo para la demo por su comportamiento variable. |
+
+Kate también confirmó resultados satisfactorios en los documentos `01_receta_medica.txt`, `02_informe_estudio.txt`, `09_receta_inconsistente_hitl.txt`, `07_urgente_receta_mf24.txt`, `06_receta_medica.pdf` y `08_orden_procedimiento.jpg`.
+
+Estos resultados complementan las validaciones ya registradas. No se repiten como nuevas pruebas de integración ni se generan actividades duplicadas para `caso-urgente.png` y `p10.jpg`, que mantienen seguimiento en MF-32 y MF-35.
+
 ## 5. Seguimiento de hallazgos
 
 | Hallazgo | Referencia | Estado / seguimiento |
@@ -168,6 +184,11 @@ La mejora representa una reducción aproximada de 10 segundos en el escenario ev
 | Urgencia + HITL + alertas | MF-26 | Escenario validado; conservar evidencia. |
 | Aprobación y rechazo HITL | MF-26 | Escenarios validados; conservar evidencia. |
 | Optimización de conexión local | MF-33 | Mejora implementada e integrada. |
+| Variación de señales de gravedad | MF-29 / MF-26 | K01. Observación de bajo impacto; destino urgente estable. |
+| Visualización de datos de urgencia en Consulta | MF-29 / MF-26 | K02. Mejora potencial de interfaz; pendiente de evaluar. |
+| Identificación de archivos TXT como JSON | MF-29 / MF-26 | K03. Limitación conocida de visualización. |
+| Variación de confianza en `caso-ambiguo.pdf` | MF-29 / MF-26 | K04. Observación de bajo impacto; HITL estable. |
+| Variación de enrutamiento en `07_informe_estudio.png` | MF-29 / MF-26 | K05. Observación de impacto medio; no usar como caso definitivo de demo. |
 
 ## 6. Estado de la actividad
 
