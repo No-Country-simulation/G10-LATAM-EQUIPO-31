@@ -45,7 +45,7 @@ No fue necesario modificar la lógica de negocio del módulo de alertas.
 - Reproducción del comportamiento original mediante la prueba simulada.
 - Documentación de los resultados y de los casos que quedaron fuera del alcance.
 
-Los hallazgos relacionados con una imagen urgente y con una inconsistencia clínica no detectada se registraron para seguimiento mediante MF-32 y MF-35.
+Los hallazgos relacionados con una imagen urgente y con una inconsistencia clínica no detectada se registraron en MF-32 y MF-35, que se cerraron como limitaciones conocidas del MVP.
 
 **Referencia:** PR de MF-24 integrado en `develop`.
 
@@ -205,7 +205,7 @@ Entre los resultados documentados se encuentran:
 - Identificación de incidencias y creación de actividades independientes para su seguimiento.
 - Registro de pruebas y evidencias en la documentación correspondiente.
 
-La actividad MF-26 permanece en seguimiento para consolidar los aportes y resultados del equipo.
+La actividad MF-26 está finalizada. Sus hallazgos quedaron registrados con su estado final en `docs/MF-26-pruebas-validacion-hallazgos.md`.
 
 **Referencia:** PR documental #70 y `docs/MF-26-pruebas-validacion-hallazgos.md`.
 
@@ -313,7 +313,7 @@ Durante las validaciones se identificaron los siguientes comportamientos:
 - **MF-35:** inconsistencia clínica evidente no detectada en `p10.jpg`.
 - **Procesamiento TXT:** diferencia entre el formato real del archivo y el valor `tipo_archivo` registrado por el backend en determinados resultados.
 
-Los hallazgos se documentan para seguimiento y no se presentan como corregidos mediante MF-31.
+MF-32 y MF-35 se cerraron como limitaciones conocidas del MVP, sin cambios de código. Los hallazgos no se presentan como corregidos mediante MF-31.
 
 ## Resultado de la Sprint Demo 4
 
@@ -333,7 +333,7 @@ Se comprobaron los flujos de procesamiento estándar, urgente y revisión humana
 
 La suite automatizada registró 361 pruebas exitosas.
 
-Los hallazgos no resueltos quedaron identificados para seguimiento independiente, sin impedir la demostración satisfactoria de los escenarios seleccionados.
+Los hallazgos no corregidos quedaron documentados como limitaciones conocidas del MVP, sin impedir la demostración satisfactoria de los escenarios seleccionados.
 
 ## Evidencias
 

@@ -12,7 +12,7 @@ Proyecto desarrollado para el Hackathon ONE G10 (Oracle Next Education & Alura).
 
 ## Objetivo del proyecto
 
-Reducir el tiempo y los errores del procesamiento manual de documentos clínicos en hospitales, laboratorios y aseguradoras de salud, mediante un pipeline automatizado de clasificación, extracción y enrutamiento, con revisión humana (Human-in-the-Loop) para los casos ambiguos, inconsistentes o de baja confianza.
+Reducir el tiempo y los errores del procesamiento manual de documentos clínicos en hospitales, laboratorios y aseguradoras de salud, mediante un pipeline automatizado de clasificación, extracción y enrutamiento, con revisión humana (Human-in-the-Loop) para los casos que el sistema detecta como ambiguos, inconsistentes o de baja confianza.
 
 ## Arquitectura aprobada
 
@@ -21,8 +21,8 @@ La arquitectura está orquestada con LangGraph y combina dos agentes especializa
 - **Agente Clasificador:** identifica el tipo de documento y la especialidad clínica correspondiente.
 - **Agente Extractor:** extrae los datos clínicos estructurados según el tipo de documento clasificado.
 - **Validación (Pydantic):** valida tipos, formato y campos requeridos del JSON extraído.
-- **Validación de consistencia clínica:** detecta contradicciones entre lo que informa el Clasificador y lo que extrae el Extractor (por ejemplo, una receta médica que además incluye un estudio solicitado). Detalle en [docs/MF-10-criterio-confianza.md](docs/MF-10-criterio-confianza.md).
-- **Evaluación de confianza:** calcula un score de confianza combinando la autoevaluación del modelo con una penalización por reglas (campos faltantes, errores de validación e inconsistencias clínicas) y lo clasifica en Alta, Media o Baja. Detalle en [docs/MF-10-criterio-confianza.md](docs/MF-10-criterio-confianza.md).
+- **Validación de consistencia (MF-09):** detecta inconsistencias estructurales y de enrutamiento entre lo que informa el Clasificador y lo que extrae el Extractor (por ejemplo, una receta médica que además incluye un estudio solicitado). No valida la plausibilidad clínica de los datos (ver [Alcance y limitaciones conocidas del MVP](#alcance-y-limitaciones-conocidas-del-mvp)). Detalle en [docs/MF-10-criterio-confianza.md](docs/MF-10-criterio-confianza.md).
+- **Evaluación de confianza:** calcula un score de confianza combinando la autoevaluación del modelo con una penalización por reglas (campos faltantes, errores de validación e inconsistencias detectadas) y lo clasifica en Alta, Media o Baja. MediFlow detecta inconsistencias estructurales y entre clasificación y extracción, pero no garantiza identificar contradicciones clínicas complejas (ver [Alcance y limitaciones conocidas del MVP](#alcance-y-limitaciones-conocidas-del-mvp)). Detalle en [docs/MF-10-criterio-confianza.md](docs/MF-10-criterio-confianza.md).
 - **Enrutamiento condicional:** deriva el documento a uno de tres destinos (`estandar`, `urgente` o `revision_humana`) según la urgencia y la categoría de confianza, con precedencia de la confianza sobre la urgencia. Detalle en [docs/MF-11-urgencia-routing.md](docs/MF-11-urgencia-routing.md).
 - **Fallback técnico:** ante fallos de la API del LLM principal (timeout, error 429/5xx, indisponibilidad), el sistema reintenta con un proveedor secundario (Groq) antes de fallar. Detalle en [docs/mf-19-fallback-tecnico.md](docs/mf-19-fallback-tecnico.md).
 - **Persistencia:** los documentos originales se almacenan en `recibidos/`, y el resultado del flujo se persiste aparte según su destino (`procesados/estandar/`, `procesados/urgente/`, `procesados/revision_humana/`, `errores_tecnicos/`), vinculado al original por `documento_id`. Detalle en [docs/persistencia-resultados.md](docs/persistencia-resultados.md).
@@ -31,11 +31,26 @@ La arquitectura está orquestada con LangGraph y combina dos agentes especializa
 - **Confianza por tipo documental (MF-21):** una entidad ausente solo penaliza si es crítica para ese tipo de documento (por ejemplo, un certificado médico no necesita medicamentos). Detalle en [docs/MF-21-confianza-por-tipo-documental.md](docs/MF-21-confianza-por-tipo-documental.md).
 - **Departamento destino (MF-23):** campo `departamento_destino`, que indica a qué área corresponde cada documento y complementa (no reemplaza) a `destino_principal`. Detalle en [docs/MF-23-enrutamiento-departamento.md](docs/MF-23-enrutamiento-departamento.md).
 - **Alertas de casos urgentes (MF-14):** cuando un documento es urgente, MediFlow avisa por Slack y correo mediante un workflow de n8n, desacoplado del flujo principal: si la alerta falla, el procesamiento continúa. Detalle en [docs/MF-14-alertas-n8n.md](docs/MF-14-alertas-n8n.md).
-- **Revisión humana, HITL (MF-12):** los documentos que el flujo deriva a `revision_humana` se consultan y resuelven desde un panel en Streamlit conectado a una API de auditoría. El revisor solo puede **aprobar** o **rechazar** (el rechazo exige motivo y notas). La decisión se guarda como un evento nuevo en `historial/` sin sobrescribir nada. Detalle en [docs/MF-12-hitl-review.md](docs/MF-12-hitl-review.md).
+- **Revisión humana, HITL (MF-12):** los documentos que el flujo deriva a `revision_humana` se consultan y resuelven desde un panel en Streamlit conectado a una API de auditoría. El revisor solo puede **aprobar** o **rechazar** (el rechazo exige motivo y notas). La decisión se guarda como un evento nuevo en `historial/` sin sobrescribir nada. En el Sprint 4 se mejoró su usabilidad (MF-30). Detalle en [docs/MF-12-hitl-review.md](docs/MF-12-hitl-review.md) y [docs/MF-30-mejoras-panel-hitl.md](docs/MF-30-mejoras-panel-hitl.md).
+- **Interfaz de carga y consulta (MF-28):** aplicación en Streamlit para cargar documentos (PDF, JPG, PNG, TXT, JSON y Markdown) y consultar su resultado, su estado y su historial a través de la API, con una explicación de la confianza. Detalle en [docs/MF-28-interfaz-amigable-de-entrada.md](docs/MF-28-interfaz-amigable-de-entrada.md).
 
 ### Diagrama de arquitectura
 
 ![Arquitectura MediFlow](docs/arquitectura.png)
+
+## Alcance y limitaciones conocidas del MVP
+
+MediFlow deriva a revisión humana los casos que **detecta** como dudosos: confianza Media o Baja, por ejemplo por datos faltantes o por inconsistencias estructurales. El MVP tiene estas limitaciones conocidas, documentadas al cierre de MF-32 y MF-35 (no se corrigieron con cambios de código):
+
+- **Sin validación de plausibilidad clínica:** el sistema no detecta contradicciones biológicas o médicas, como un paciente masculino con diagnóstico de embarazo (`p10.jpg`, MF-35) o un paciente de 8 meses con Alzheimer avanzado (`caso-urgente.png`, MF-32). Estos documentos pueden procesarse como estándar con confianza Alta.
+- **Urgencia solo con señales explícitas:** la ruta urgente requiere señales explícitas en el texto (signos vitales o términos de alarma); el sistema no infiere gravedad implícita.
+- **Dependencia de la calidad del documento:** el sistema procesa el texto tal como llega, sin corregir datos incoherentes de origen.
+
+**Mejoras futuras:** un motor de reglas de plausibilidad clínica (sexo, edad y diagnósticos) y una configuración sin código para que el hospital ajuste reglas de triaje, destinos y umbrales.
+
+## Versión desplegada
+
+La URL de la versión desplegada se publicará cuando `develop` se integre a `main` y el despliegue en Render quede configurado.
 
 ## Tecnologías definidas
 
@@ -47,7 +62,7 @@ La arquitectura está orquestada con LangGraph y combina dos agentes especializa
 - Groq (`qwen/qwen3.8-27b`) — proveedor secundario para el fallback técnico del LLM
 - PyMuPDF — rasteriza PDF a imagen para el fallback de Groq
 - OCI Object Storage — almacenamiento de documentos originales, resultados por destino e historial de trazabilidad
-- Streamlit — panel de revisión humana (HITL)
+- Streamlit — interfaz de carga y consulta, y panel de revisión humana (HITL)
 - n8n — workflow de alertas de casos urgentes (aviso por Slack y correo)
 
 ## Estructura del repositorio
@@ -61,7 +76,7 @@ G10-LATAM-EQUIPO-31/
 │   ├── schemas/        # Modelos Pydantic (validación de datos)
 │   ├── services/        # Servicios externos (OCI, LLM, etc.)
 │   └── config/           # Configuración del proyecto
-├── frontend/               # Panel de revisión humana (Streamlit)
+├── frontend/               # Interfaz de carga y consulta, y panel de revisión humana (Streamlit)
 ├── tests/                 # Pruebas automatizadas
 ├── samples/                # Casos de prueba / documentos de ejemplo
 ├── docs/                     # Documentación y diagramas
@@ -105,6 +120,25 @@ Con el `.env` completo y la API en marcha (`python -m uvicorn main:app --port 80
 
 La respuesta indica el `estado` del documento (`estandar`, `urgente` o `revision_humana`), si el resultado y el historial se guardaron en OCI (`persistencia_ok` e `historial_ok`) y el detalle de la clasificación, la extracción y la validación. Los documentos derivados a `revision_humana` se resuelven desde el panel de revisión humana.
 
+## Cómo ejecutar la interfaz de carga y consulta
+
+Con el `.env` completo (claves de Gemini y credenciales de OCI), desde la raíz del repositorio y en dos terminales:
+
+```
+python -m uvicorn main:app --port 8000          # terminal 1: API
+python -m streamlit run frontend/mediflow.py    # terminal 2: interfaz
+```
+
+La interfaz necesita la API en marcha: si está apagada, muestra un aviso de falta de conexión. Streamlit usa su puerto por defecto (`http://localhost:8501`). La interfaz tiene tres pantallas, accesibles desde el menú lateral:
+
+| Pantalla | Dirección | Qué permite |
+|---|---|---|
+| Carga de documentos | `/carga` | Cargar PDF, JPG, PNG, TXT, JSON o Markdown (estos dos últimos se envían como texto) |
+| Consulta de resultados | `/consulta` | Ver resultado, estado e historial de un documento |
+| Revisión humana | `/revision` | Panel HITL para aprobar o rechazar casos |
+
+Detalle en [docs/MF-28-interfaz-amigable-de-entrada.md](docs/MF-28-interfaz-amigable-de-entrada.md).
+
 ## Cómo ejecutar el panel de revisión humana
 
 Con el `.env` completo (claves de Gemini y credenciales de OCI), desde la raíz del repositorio y en dos terminales:
@@ -126,33 +160,72 @@ El panel queda en `http://localhost:8502`. El nombre del auditor se escribe a ma
 
 ## Equipo
 
-La tabla corresponde a las actividades desarrolladas durante los sprints. Las asignaciones vigentes se pueden consultar en GitHub Projects.
+Integrantes que participaron en el desarrollo de MediFlow y sus contribuciones generales. El detalle de las actividades está en la sección siguiente, y las asignaciones vigentes se pueden consultar en GitHub Projects.
 
-| Actividad | Responsable |
+| Integrante | Contribuciones generales |
 |---|---|
-| MF-01 Estructura base del proyecto | Katherine / apoyo coordinación |
-| MF-02 Contratos y schemas Pydantic | Manuel / Kimberlyn |
-| MF-03 Ingesta mediante FastAPI | Duvan / Kimberlyn |
-| MF-04 Integración inicial OCI Object Storage | Katherine |
-| MF-05 Agente Clasificador | Zahir |
-| MF-06 Agente Extractor | Mauricio |
-| MF-07 Orquestación base LangGraph | Jennifer + Kimberlyn |
-| MF-08 Integración del flujo completo | Kimberlyn |
-| MF-16 Dataset/casos de prueba | Manuel / Kimberlyn |
-| MF-09 Validación de consistencia clínica | Tatiana / Tatiana + Kimberlyn |
-| MF-10 Evaluación de confianza | Duván / Jennifer |
-| MF-11 Evaluación de urgencia y routing | Jennifer |
-| MF-13 Persistencia de resultados en OCI | Katherine |
-| MF-15 Historial de triaje en OCI | Zahir / Katherine |
-| MF-19 Fallback técnico de LLM | Mauricio |
-| MF-20 Integración y validación Sprint 2 | Kimberlyn |
-| MF-12 Mecanismo HITL y panel de revisión humana | Mauricio / apoyo OCI: Katherine |
-| MF-22 Huella SHA-256 del documento | Katherine |
-| MF-16 Fortalecimiento del dataset y casos de prueba (Sprint 3) | Tatiana |
-| MF-14 Alertas de casos urgentes con n8n (Slack + correo) | Zahir |
-| MF-21 Confianza según tipo documental | Jennifer |
-| MF-23 Enrutamiento por departamento destino | Jennifer |
-| MF-17 Validación E2E y regresión final del MVP | Kimberlyn |
+| Kimberlyn | Liderazgo y coordinación del equipo, desarrollo de contratos Pydantic e ingesta con FastAPI, integración y validación del flujo, seguimiento de actividades, revisión e integración de Pull Requests |
+| Katherine | Estructura base del proyecto, integración con OCI Object Storage, persistencia de resultados e historial, huella SHA-256, apoyo en OCI al panel HITL, pruebas adicionales y selección de los documentos definitivos de la demo |
+| Mauricio | Agente Extractor, fallback técnico con Groq, panel de revisión humana (HITL) y soporte de archivos TXT |
+| Jennifer | Orquestación con LangGraph, evaluación de confianza (incluida la de tipo documental), urgencia y routing, enrutamiento por departamento y pruebas adicionales |
+| Zahir | Participación inicial en la creación del repositorio, Agente Clasificador y alertas de casos urgentes con n8n |
+| Tatiana | Validación de consistencia (MF-09) y fortalecimiento del dataset de casos de prueba |
+
+## Actividades desarrolladas por sprint
+
+Registro de las actividades (MF) de cada sprint. El detalle de cada una está en los documentos de la carpeta `docs/` y en los Pull Requests indicados.
+
+### Sprint 1
+
+| Actividad | Descripción | Referencia |
+|---|---|---|
+| MF-01 Estructura base del proyecto | Carpetas, dependencias, README inicial y diagrama de arquitectura | — |
+| MF-02 Contratos y schemas Pydantic | Contratos de entrada, clasificación, extracción y respuesta, con sus pruebas | — |
+| MF-03 Ingesta con FastAPI | Endpoint `POST /documentos` para recibir y validar el archivo | — |
+| MF-04 Integración inicial con OCI Object Storage | Subida y recuperación de documentos originales | — |
+| MF-05 Agente Clasificador | Identifica el tipo de documento y la especialidad con Gemini multimodal | — |
+| MF-06 Agente Extractor | Extracción estructurada según el tipo, con reintentos propios | — |
+| MF-07 Orquestación base con LangGraph | Estado y grafo inicial que conecta los componentes | — |
+| MF-08 Integración del flujo completo | Conecta endpoint, grafo y OCI de punta a punta | — |
+| MF-16 Dataset inicial | Dataset de 8 casos de prueba | [docs/MF-16-arquitectura-dataset.md](docs/MF-16-arquitectura-dataset.md) |
+
+### Sprint 2
+
+| Actividad | Descripción | Referencia |
+|---|---|---|
+| MF-09 Validación de consistencia | Validaciones estructurales y de consistencia entre clasificación y extracción; no garantiza detectar contradicciones de plausibilidad clínica (ver MF-32 y MF-35 en [Alcance y limitaciones conocidas del MVP](#alcance-y-limitaciones-conocidas-del-mvp)) | [docs/MF-09-validacion-consistencia.md](docs/MF-09-validacion-consistencia.md) |
+| MF-10 Evaluación de confianza | Score de confianza (Alta, Media o Baja) | [docs/MF-10-criterio-confianza.md](docs/MF-10-criterio-confianza.md) |
+| MF-11 Urgencia y routing | Decide el destino: `estandar`, `urgente` o `revision_humana` | [docs/MF-11-urgencia-routing.md](docs/MF-11-urgencia-routing.md) |
+| MF-13 Persistencia de resultados en OCI | Guarda el resultado según su destino | [docs/persistencia-resultados.md](docs/persistencia-resultados.md) |
+| MF-15 Historial y trazabilidad | Registro de cada corrida en `historial/{documento_id}/` | [docs/historial-triaje.md](docs/historial-triaje.md) |
+| MF-19 Fallback técnico de LLM | Respaldo con Groq ante fallos técnicos de Gemini | [docs/mf-19-fallback-tecnico.md](docs/mf-19-fallback-tecnico.md) |
+| MF-20 Integración y validación del Sprint 2 | Valida los tres destinos contra OCI real | [docs/MF-20-integracion-validacion-sprint2.md](docs/MF-20-integracion-validacion-sprint2.md) |
+
+### Sprint 3
+
+| Actividad | Descripción | Referencia |
+|---|---|---|
+| MF-22 Huella SHA-256 | `huella_sha256` en `procesados/` y en el historial | PR #46 · [docs/historial-triaje.md](docs/historial-triaje.md) |
+| MF-12 Mecanismo HITL y panel de revisión humana | Panel en Streamlit, API de auditoría y decisiones aprobar o rechazar | PR #47 y #48 · [docs/MF-12-hitl-review.md](docs/MF-12-hitl-review.md) |
+| MF-16 Fortalecimiento del dataset | Casos realistas en PDF e imagen | PR #49 · [docs/MF-16-dataset-casos-prueba.md](docs/MF-16-dataset-casos-prueba.md) |
+| MF-21 Confianza por tipo documental | Matriz de criticidad por tipo de documento | PR #55 · [docs/MF-21-confianza-por-tipo-documental.md](docs/MF-21-confianza-por-tipo-documental.md) |
+| MF-23 Enrutamiento por departamento | Campo `departamento_destino` | PR #56 · [docs/MF-23-enrutamiento-departamento.md](docs/MF-23-enrutamiento-departamento.md) |
+| MF-14 Alertas de casos urgentes con n8n | Aviso por Slack y correo, desacoplado del flujo | PR #54 · [docs/MF-14-alertas-n8n.md](docs/MF-14-alertas-n8n.md) |
+| MF-17 Validación E2E y regresión final del MVP | Validación de punta a punta sin código nuevo | PR #57 · [docs/MF-17-validacion-e2e-regresion.md](docs/MF-17-validacion-e2e-regresion.md) |
+
+### Sprint 4
+
+| Actividad | Descripción | Referencia |
+|---|---|---|
+| MF-24 Confianza y gravedad en receta urgente | Corrección de los guiones en la confianza y las señales de gravedad; alertas aisladas durante las pruebas | PR #77 · [docs/MF-24-confianza-gravedad-receta-urgente.md](docs/MF-24-confianza-gravedad-receta-urgente.md) |
+| MF-25 Derivación del caso estándar a HITL | Reglas de clasificación explicadas y equivalencia estudios/procedimientos corregida | PR #78 · [docs/MF-25-derivacion-estandar-hitl.md](docs/MF-25-derivacion-estandar-hitl.md) |
+| MF-26 Pruebas adicionales y registro de hallazgos | Pruebas del equipo (formatos, OCI, HITL y alertas) con hallazgos reproducibles | PR #70 · [docs/MF-26-pruebas-validacion-hallazgos.md](docs/MF-26-pruebas-validacion-hallazgos.md) |
+| MF-28 Interfaz amigable de entrada | Interfaz de carga y consulta en Streamlit, con explicación de la confianza | [docs/MF-28-interfaz-amigable-de-entrada.md](docs/MF-28-interfaz-amigable-de-entrada.md) |
+| MF-29 Selección de documentos definitivos de demo | Tres documentos elegidos tras 19 corridas por API y 9 por la interfaz | [docs/MF-29-seleccion-documentos-definitivos.md](docs/MF-29-seleccion-documentos-definitivos.md) |
+| MF-30 Usabilidad del panel HITL | Avisos duplicados y mensajes de API o bandeja no disponible corregidos | PR #67 · [docs/MF-30-mejoras-panel-hitl.md](docs/MF-30-mejoras-panel-hitl.md) |
+| MF-31 Integración y validación del Sprint 4 | Validación de las actividades del sprint: 361 pruebas aprobadas | PR #79 · [docs/MF-31-integracion-validacion-sprint4.md](docs/MF-31-integracion-validacion-sprint4.md) |
+| MF-33 Mejora de conexión y respuesta de la interfaz | Uso de `127.0.0.1` y mejor respuesta con la API apagada | PR #71 · [docs/MF-33-api-url-ipv4.md](docs/MF-33-api-url-ipv4.md) |
+| MF-34 Soporte TXT en la interfaz y API | Carga de archivos de texto UTF-8 como `text/plain` | PR #74 · [docs/MF-72-soporte-txt.md](docs/MF-72-soporte-txt.md) |
 
 ## Cierre del Sprint 1
 
@@ -174,11 +247,8 @@ Al cierre del Sprint 2 quedó integrado y validado el flujo completo de triaje, 
 
 **Flujo de procesamiento:** Ingesta → Clasificador → Extractor → Validación → Consistencia → Confianza → Routing → Persistencia → Historial
 
-El sistema, además de clasificar, extraer y validar (Sprint 1), ahora valida la consistencia clínica entre clasificación y extracción, calcula un score de confianza combinando la autoevaluación del modelo con reglas de completitud, y enruta cada documento a uno de tres destinos: `estandar`, `urgente` o `revision_humana`. El resultado se persiste en OCI Object Storage según su destino, y cada corrida queda además registrada en un historial de trazabilidad que nunca se sobrescribe. Si el proveedor principal del LLM (Gemini) falla por un problema técnico, el sistema reintenta automáticamente con un proveedor secundario (Groq) antes de marcar el documento como fallo técnico.
+El sistema, además de clasificar, extraer y validar (Sprint 1), ahora valida la consistencia entre clasificación y extracción, calcula un score de confianza combinando la autoevaluación del modelo con reglas de completitud, y enruta cada documento a uno de tres destinos: `estandar`, `urgente` o `revision_humana`. El resultado se persiste en OCI Object Storage según su destino, y cada corrida queda además registrada en un historial de trazabilidad que nunca se sobrescribe. Si el proveedor principal del LLM (Gemini) falla por un problema técnico, el sistema reintenta automáticamente con un proveedor secundario (Groq) antes de marcar el documento como fallo técnico.
 
-- **Destinos de routing:** `estandar`, `urgente` y `revision_humana`, según la urgencia detectada y la categoría de confianza, con precedencia de la confianza sobre la urgencia.
-- **Persistencia y trazabilidad:** el resultado de cada documento se guarda en `procesados/{destino}/` u `errores_tecnicos/` (MF-13), y cada corrida queda registrada en `historial/{documento_id}/` en OCI Object Storage, sin pisar corridas anteriores (MF-15).
-- **Fallback técnico:** ante timeout, error 429/5xx o indisponibilidad del proveedor principal, el Clasificador y el Extractor reintentan con Groq (`qwen/qwen3.8-27b`) antes de fallar (MF-19).
 - **Pruebas automatizadas:** 175/175 aprobadas sobre la rama `develop`.
 - **Evidencias:** el detalle de cada escenario validado (estándar, urgente y revisión humana), con persistencia e historial verificados en OCI, se documenta en [docs/evidencias-sprint-2.md](docs/evidencias-sprint-2.md).
 
@@ -186,22 +256,23 @@ El sistema, además de clasificar, extraer y validar (Sprint 1), ahora valida la
 
 Al cierre del Sprint 3 (08/10/2026) quedó integrado y validado el MVP completo en `develop`: además del flujo del Sprint 2, el sistema suma revisión humana (HITL), huella SHA-256 del documento, confianza según tipo documental, departamento destino y alertas de casos urgentes por Slack y correo. El conjunto se presentó en la demo de cierre del Sprint 3 con los tres flujos: estándar, urgente y revisión humana.
 
-**Integrado en `develop`:**
-
-- **MF-22 Huella SHA-256:** `huella_sha256` en `procesados/` y en cada evento de `historial/` (PR #46). El bloqueo de documentos ya procesados queda fuera de este sprint.
-- **MF-12 Mecanismo HITL y panel de revisión humana:** panel en Streamlit, API de auditoría y decisiones APROBADO / RECHAZADO con motivo, registradas en `historial/` (PR #47 y PR #48). Detalle en [docs/MF-12-hitl-review.md](docs/MF-12-hitl-review.md).
-- **MF-16 Fortalecimiento del dataset:** casos de prueba realistas en PDF e imagen en `docs/assets/mf-16/` (PR #49). Detalle en [docs/MF-16-dataset-casos-prueba.md](docs/MF-16-dataset-casos-prueba.md).
-- **MF-21 Confianza por tipo documental:** matriz de criticidad por tipo de documento (PR #55). Detalle en [docs/MF-21-confianza-por-tipo-documental.md](docs/MF-21-confianza-por-tipo-documental.md).
-- **MF-23 Enrutamiento por departamento:** campo aditivo `departamento_destino` (`cola_urgencias_medicas`, `farmacia_hospitalaria`, `auditoria_autorizaciones` o `historia_clinica_electronica`; la urgencia tiene precedencia sobre el tipo documental) (PR #56). Detalle en [docs/MF-23-enrutamiento-departamento.md](docs/MF-23-enrutamiento-departamento.md).
-- **MF-14 Alertas de casos urgentes con n8n:** aviso por Slack y correo, desacoplado del flujo (PR #54). Detalle en [docs/MF-14-alertas-n8n.md](docs/MF-14-alertas-n8n.md).
-- **MF-17 Validación E2E y regresión final del MVP:** validación de punta a punta (estándar, urgente, HITL, OCI, confianza, fallback y alertas reales) sin código nuevo (PR #57). Detalle en [docs/MF-17-validacion-e2e-regresion.md](docs/MF-17-validacion-e2e-regresion.md).
-
 - **Pruebas automatizadas:** 272/272 aprobadas sobre la rama `develop`.
 - **Evidencias:** el detalle de cada escenario validado se documenta en [docs/evidencias-sprint-3.md](docs/evidencias-sprint-3.md), [docs/MF-12-hitl-review.md](docs/MF-12-hitl-review.md) y [docs/MF-17-validacion-e2e-regresion.md](docs/MF-17-validacion-e2e-regresion.md).
 
-**Hallazgos de la demo (pasan al Sprint 4):** la demostración dejó dos observaciones que requieren investigación y no se consideran resueltas con el cierre del Sprint 3:
+**Hallazgos de la demo (atendidos en el Sprint 4):** la demostración dejó dos observaciones que se investigaron y corrigieron en el Sprint 4:
 
-- **Flujo estándar:** el documento elegido para la demo se derivó a revisión humana (HITL). Falta revisar los campos, la confianza y la ruta del caso para justificar la derivación o corregirla.
-- **Flujo urgente:** en la receta médica usada, la confianza y las señales de gravedad se mostraron como guiones. Falta identificar si el origen está en la extracción, el transporte o la presentación.
+- **Flujo estándar:** el documento elegido para la demo se derivó a revisión humana (HITL). Se revisaron los campos, la confianza y la ruta del caso, se explicaron las reglas de clasificación y se corrigió una equivalencia de campos (MF-25).
+- **Flujo urgente:** en la receta médica usada, la confianza y las señales de gravedad se mostraron como guiones. Se investigó el origen y se corrigió (MF-24).
 
-**Próximo paso:** Sprint 4, orientado a estabilizar el MVP, investigar y corregir estos hallazgos, realizar pruebas adicionales del equipo y ofrecer una interfaz amigable de entrada. El alcance y los responsables del Sprint 4 los define el equipo.
+## Cierre del Sprint 4
+
+Al cierre de la etapa de desarrollo del Sprint 4 (16/10/2026) quedaron integradas en `develop` la interfaz amigable de carga y consulta, el soporte de archivos TXT, las correcciones de los hallazgos de la demo del Sprint 3 y las mejoras de usabilidad del panel HITL. En la Sprint Demo 4 se presentaron los tres escenarios (estándar, urgente y revisión humana, incluido el rechazo de un caso) con entradas PDF, JPEG, PNG y TXT.
+
+**Documentos definitivos de la demo (MF-29):** `01_receta_medica.txt` (flujo estándar), `02_informe_estudio.txt` (flujo urgente) y `09_receta_inconsistente_hitl.txt` (revisión humana). Además, se validaron con pruebas satisfactorias `06_receta_medica.pdf` (flujo estándar, PDF) y `08_orden_procedimiento.jpg` (flujo estándar, imagen), documentadas en [docs/MF-29-seleccion-documentos-definitivos.md](docs/MF-29-seleccion-documentos-definitivos.md) y [docs/MF-26-pruebas-validacion-hallazgos.md](docs/MF-26-pruebas-validacion-hallazgos.md).
+
+- **Pruebas automatizadas:** 361 aprobadas en la validación de integración del Sprint 4 (MF-31).
+- **Evidencias:** el detalle de los escenarios validados se documenta en [docs/evidencias-sprint-4.md](docs/evidencias-sprint-4.md).
+
+**Hallazgos MF-32 y MF-35:** se cerraron como **limitaciones conocidas del MVP**, sin cambios de código. Ver [Alcance y limitaciones conocidas del MVP](#alcance-y-limitaciones-conocidas-del-mvp).
+
+**Semana 5 (cierre del proyecto):** consolidación de `develop` en `main`, despliegue de la versión final, actualización de la documentación y del diagrama de arquitectura, video del entregable y preparación del Demo Day.

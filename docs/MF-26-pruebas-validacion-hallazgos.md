@@ -1,7 +1,7 @@
 # MF-26 — Registro de pruebas, validaciones y hallazgos
 
 **Actividad:** MF-26 — Pruebas y validación del flujo  
-**Estado:** En progreso  
+**Estado:** Finalizada  
 **Participantes:** Equipo MediFlow. Pruebas y hallazgos registrados por Kimberlyn, Jennifer y Kate.
 
 ## 1. Objetivo
@@ -10,7 +10,7 @@ Documentar los resultados de las pruebas funcionales realizadas sobre MediFlow, 
 
 Este registro consolida los hallazgos obtenidos durante las pruebas del equipo y los análisis relacionados con MF-24 y MF-25.
 
-La actividad permanece abierta, ya que todavía existen escenarios pendientes de validación e investigación.
+La actividad está finalizada. Los hallazgos quedaron registrados con su estado final en la sección 5, para mantener la trazabilidad.
 
 ## 2. Alcance de las pruebas
 
@@ -31,9 +31,9 @@ Se consolidan los resultados obtenidos durante las validaciones realizadas por K
 
 | Documento / escenario | Resultado esperado | Resultado obtenido | Evaluación |
 |---|---|---|---|
-| `caso-estandar.pdf` | Procesamiento como caso estándar | Clasificado como orden médica, confianza 0.93 Media y derivación a revisión humana. | Requiere análisis de clasificación — MF-25 |
-| `caso-urgente.png` | Detección de urgencia | Clasificado como no urgente, con confianza 0.97 Alta y procesamiento automático. | Pendiente de análisis — MF-32 |
-| `p10.jpg` | Identificación de contradicciones clínicas | No se identificó la contradicción entre el sexo masculino registrado y el diagnóstico de embarazo múltiple de 29 semanas. | No cumple el escenario esperado — MF-35 |
+| `caso-estandar.pdf` | Procesamiento como caso estándar | Clasificado como orden médica, confianza 0.93 Media y derivación a revisión humana. | Analizado en MF-25 |
+| `caso-urgente.png` | Detección de urgencia | Clasificado como no urgente, con confianza 0.97 Alta y procesamiento automático. | Limitación conocida del MVP — MF-32 |
+| `p10.jpg` | Identificación de contradicciones clínicas | No se identificó la contradicción entre el sexo masculino registrado y el diagnóstico de embarazo múltiple de 29 semanas. | No cumple el escenario esperado; limitación conocida del MVP — MF-35 |
 | `caso-urgente-inferido.jpg` | Detección de emergencia y envío de alertas | Emergencia detectada y alertas recibidas. | Satisfactorio |
 | Reporte clínico urgente 2D | Detección de emergencia y enrutamiento seguro | Emergencia detectada, confianza 0.68 Media, revisión humana y alertas recibidas. | Satisfactorio con observaciones |
 | `DOC-20261013-203307-62D7` | Aprobación de un documento desde HITL | Aprobación persistida y visible en Consulta de resultados. | Satisfactorio |
@@ -46,7 +46,7 @@ Los documentos `caso-estandar.pdf`, `caso-urgente.png` y `p10.jpg` contienen inf
 
 Por tanto, los resultados observados deben interpretarse considerando el propósito de cada prueba y no únicamente el nombre del archivo o el flujo esperado inicialmente.
 
-La investigación de MF-25 permitió explicar la derivación de `caso-estandar.pdf` a revisión humana. Los comportamientos observados en `caso-urgente.png` y `p10.jpg` mantienen seguimiento en MF-32 y MF-35, respectivamente.
+La investigación de MF-25 permitió explicar la derivación de `caso-estandar.pdf` a revisión humana. Los comportamientos observados en `caso-urgente.png` y `p10.jpg` se registraron en MF-32 y MF-35, respectivamente, y se cerraron como limitaciones conocidas del MVP.
 
 La reproducción de `DOC-TEST-MF11-X` permitió respaldar la hipótesis planteada durante MF-24.
 
@@ -58,7 +58,7 @@ Las pruebas de aprobación, rechazo y alertas en escenarios urgentes permitieron
 
 **Documento:** `caso-estandar.pdf`  
 **Actividad relacionada:** MF-25  
-**Estado:** Causa identificada; pendiente de determinar si requiere ajuste de clasificación.
+**Estado:** Causa identificada; corrección de equivalencias integrada en MF-25. La clasificación documental inicial no se modificó en el MVP.
 
 Durante las pruebas de integración se observó que un documento utilizado como caso estándar fue derivado a revisión humana, con confianza numérica de 0.93 y categoría Media.
 
@@ -66,12 +66,12 @@ En paralelo, durante la investigación de MF-25, Jennifer identificó que el cla
 
 En MF-25 se corrigió la evaluación de confianza para reconocer `estudios_solicitados` como equivalente a `procedimientos_solicitados` en órdenes médicas. Esta corrección ya fue integrada.
 
-El documento `caso-estandar.pdf` contiene contradicciones clínicas deliberadas, por lo que su derivación a revisión humana no debe considerarse automáticamente incorrecta. La corrección implementada en MF-25 resolvió la equivalencia entre estudios y procedimientos solicitados, pero no modificó la clasificación documental inicial. Queda pendiente determinar si esta última requiere algún ajuste.
+El documento `caso-estandar.pdf` contiene contradicciones clínicas deliberadas, por lo que su derivación a revisión humana no debe considerarse automáticamente incorrecta. La corrección implementada en MF-25 resolvió la equivalencia entre estudios y procedimientos solicitados, pero no modificó la clasificación documental inicial. La clasificación documental inicial se mantuvo sin cambios en el MVP.
 
 ### H02 — Falso negativo en la detección de urgencia
 
 **Documento:** `caso-urgente.png`  
-**Estado:** Pendiente de investigación — MF-32.
+**Estado:** MF-32, cerrado como limitación conocida del MVP, sin cambios de código.
 
 El documento contiene información clínica intencionalmente contradictoria, incluyendo un paciente de 8 meses con diagnóstico de Alzheimer avanzado.
 
@@ -79,12 +79,12 @@ Durante las pruebas, MediFlow clasificó el documento como no urgente, con confi
 
 Dado que el documento fue diseñado para evaluar el comportamiento del sistema ante inconsistencias clínicas, este resultado requiere analizarse en función de las reglas de detección de urgencia y validación de contradicciones definidas para el MVP.
 
-**Seguimiento:** MF-32. No se considera resuelto ni se descarta el hallazgo por tratarse de datos sintéticos.
+**Seguimiento:** MF-32 se cerró como limitación conocida del MVP: el sistema no valida la plausibilidad clínica y la ruta urgente requiere señales explícitas en el texto. El hallazgo no se descarta por tratarse de datos sintéticos, ni se presenta como corregido.
 
 ### H03 — Contradicción clínica no detectada
 
 **Documento:** `p10.jpg`  
-**Estado:** Pendiente de investigación — MF-35.
+**Estado:** MF-35, cerrado como limitación conocida del MVP, sin cambios de código.
 
 Jennifer identificó durante sus pruebas que el sistema no señaló una contradicción clínica deliberada en el documento.
 
@@ -92,7 +92,7 @@ El caso corresponde a un paciente registrado como masculino, con diagnóstico de
 
 El documento fue diseñado específicamente para evaluar la detección de inconsistencias clínicas. El resultado observado evidencia que esta contradicción no fue identificada durante la prueba, por lo que corresponde revisar el alcance de las validaciones implementadas.
 
-**Seguimiento:** MF-35. Hallazgo documentado, sin corrección aplicada.
+**Seguimiento:** MF-35 se cerró como limitación conocida del MVP: las validaciones implementadas son estructurales y de consistencia entre clasificación y extracción, y no detectan contradicciones de plausibilidad clínica. Sin corrección aplicada.
 
 ### H04 — Alertas incompletas generadas durante pruebas automatizadas
 
@@ -164,43 +164,43 @@ Kate realizó 19 corridas por la API (`POST /documentos`) y 9 por la pantalla de
 | Hallazgo | Documento | Resultado observado | Impacto / seguimiento |
 |---|---|---|---|
 | K01 — Variación de señales de gravedad | `02_informe_estudio.txt` | Se obtuvieron dos señales en algunas corridas y una en otras. Se mantuvieron el destino cola_urgencias_medicas y la confianza Alta 0.93.| Bajo. Registrar variación; evitar prometer una cantidad fija de señales. |
-| K02 — Visualización incompleta en Consulta | `02_informe_estudio.txt` | La pantalla no muestra el departamento de destino de los urgentes ni las señales de gravedad; estas últimas están disponibles en el JSON técnico. | Medio para la demo. Posible mejora de interfaz; pendiente de evaluar si requiere tarea. |
+| K02 — Visualización incompleta en Consulta | `02_informe_estudio.txt` | La pantalla no muestra el departamento de destino de los urgentes ni las señales de gravedad; estas últimas están disponibles en el JSON técnico. | Medio para la demo. Posible mejora de interfaz; sin cambios en el MVP. |
 | K03 — Tipo de archivo TXT | `01_receta_medica.txt` | El campo tipo_archivo del historial de la API registra el valor «JSON», mientras que la pantalla de Carga de Streamlit muestra text/plain. Se documenta la diferencia entre ambas representaciones. | Bajo. Limitación de visualización conocida en MF-28. |
 | K04 — Variación de confianza y señal de gravedad | `caso-ambiguo.pdf` | En tres corridas se obtuvo `revision_humana`, con confianza Media 0.93 / 0.88 / 0.93. La frase «Urgencia: no urgente» apareció como señal de gravedad. | Bajo. El destino fue estable; queda registrada la inconsistencia en el puntaje y las señales. |
 | K05 — Variación de enrutamiento | `07_informe_estudio.png` | En cuatro corridas, tres derivaron a `revision_humana` (Media 0.88) y una a urgente directo (Alta 0.93). | Medio. No se propone como documento definitivo para la demo por su comportamiento variable. |
 
 Kate también confirmó resultados satisfactorios en los documentos `01_receta_medica.txt`, `02_informe_estudio.txt`, `09_receta_inconsistente_hitl.txt`, `07_urgente_receta_mf24.txt`, `06_receta_medica.pdf` y `08_orden_procedimiento.jpg`.
 
-Estos resultados complementan las validaciones ya registradas. No se repiten como nuevas pruebas de integración ni se generan actividades duplicadas para `caso-urgente.png` y `p10.jpg`, que mantienen seguimiento en MF-32 y MF-35.
+Estos resultados complementan las validaciones ya registradas. No se repiten como nuevas pruebas de integración ni se generan actividades duplicadas para `caso-urgente.png` y `p10.jpg`, registrados en MF-32 y MF-35.
 
 ## 5. Seguimiento de hallazgos
 
 | Hallazgo | Referencia | Estado / seguimiento |
 |---|---|---|
-| Clasificación de `caso-estandar.pdf` | MF-25 | Documento sintético con contradicciones deliberadas. Corrección de equivalencias integrada; clasificación inicial pendiente de evaluación. |
-| Clasificación de `caso-urgente.png` | MF-32 | Caso sintético contradictorio; pendiente analizar detección de urgencia e inconsistencias. |
-| Contradicción no detectada en `p10.jpg` | MF-35 | Embarazo múltiple en paciente masculino; pendiente analizar detección de inconsistencias. |
+| Clasificación de `caso-estandar.pdf` | MF-25 | Documento sintético con contradicciones deliberadas. Corrección de equivalencias integrada; clasificación inicial sin cambios en el MVP. |
+| Clasificación de `caso-urgente.png` | MF-32 | Caso sintético contradictorio. Cerrado como limitación conocida del MVP, sin cambios de código. |
+| Contradicción no detectada en `p10.jpg` | MF-35 | Embarazo múltiple en paciente masculino. Cerrado como limitación conocida del MVP, sin cambios de código. |
 | Alertas reales durante pytest | MF-24 | Protección implementada e integrada en `tests/conftest.py`. |
 | Urgencia + HITL + alertas | MF-26 | Escenario validado; conservar evidencia. |
 | Aprobación y rechazo HITL | MF-26 | Escenarios validados; conservar evidencia. |
 | Optimización de conexión local | MF-33 | Mejora implementada e integrada. |
 | Variación de señales de gravedad | MF-29 / MF-26 | K01. Observación de bajo impacto; destino urgente estable. |
-| Visualización de datos de urgencia en Consulta | MF-29 / MF-26 | K02. Mejora potencial de interfaz; pendiente de evaluar. |
+| Visualización de datos de urgencia en Consulta | MF-29 / MF-26 | K02. Mejora potencial de interfaz; sin cambios en el MVP. |
 | Identificación de archivos TXT como JSON | MF-29 / MF-26 | K03. Limitación conocida de visualización. |
 | Variación de confianza en `caso-ambiguo.pdf` | MF-29 / MF-26 | K04. Observación de bajo impacto; HITL estable. |
 | Variación de enrutamiento en `07_informe_estudio.png` | MF-29 / MF-26 | K05. Observación de impacto medio; no usar como caso definitivo de demo. |
 
 ## 6. Estado de la actividad
 
-MF-26 continúa en progreso.
+MF-26 está finalizada.
 
-Se han identificado comportamientos funcionales satisfactorios y hallazgos que requieren seguimiento.
+Se identificaron comportamientos funcionales satisfactorios y hallazgos que quedaron registrados con su estado final.
 
 Los resultados coincidentes entre las pruebas de integración y las investigaciones realizadas por Jennifer se consolidan en este registro para mantener la trazabilidad y evitar duplicar incidencias.
 
-Los hallazgos pendientes de investigación se encuentran identificados en MF-32 y MF-35. Las correcciones correspondientes a MF-24, MF-25 y MF-33 ya fueron integradas.
+Las correcciones correspondientes a MF-24, MF-25 y MF-33 fueron integradas. Los hallazgos MF-32 y MF-35 se cerraron como limitaciones conocidas del MVP, sin cambios de código: MediFlow realiza validaciones estructurales y de consistencia entre clasificación y extracción, pero no garantiza detectar contradicciones de plausibilidad clínica.
 
-Los documentos sintéticos con contradicciones deliberadas se mantienen como casos de prueba válidos para evaluar la detección de inconsistencias. Su análisis y posible corrección se gestionan mediante los hallazgos correspondientes, sin bloquear la documentación de las demás pruebas satisfactorias de MF-26.
+Los documentos sintéticos con contradicciones deliberadas se mantienen como casos de prueba válidos para evaluar la detección de inconsistencias. Su análisis quedó registrado en los hallazgos correspondientes, sin bloquear la documentación de las demás pruebas satisfactorias de MF-26.
 
 ## 7. Evidencias de las pruebas
 
@@ -217,4 +217,4 @@ Las evidencias se incorporarán progresivamente conforme se organicen las captur
 | `DOC-TEST-MF11-X` | Captura de Slack con confianza y señales de gravedad vacías. | **Actividad relacionada:** MF-24 ![Alerta generada durante pytest](assets/sprint-4/MF-26/mf24-alerta-pytest-slack.png) |
 | Optimización de conexión local de Streamlit (MF-33) | Mediciones antes y después del ajuste de `127.0.0.1`, con 342 pruebas satisfactorias reportadas por Mauricio. | **[Pendiente: evidencias de Mauricio en MF-33 / Issue #69]** |
 
-**Nota:** Los espacios señalados se completarán con las capturas, rutas de archivos o enlaces correspondientes. Los hallazgos relacionados con MF-32 y MF-35 se mantienen abiertos para seguimiento.
+**Nota:** Los espacios señalados se completarán con las capturas, rutas de archivos o enlaces correspondientes. Los hallazgos relacionados con MF-32 y MF-35 se cerraron como limitaciones conocidas del MVP.
