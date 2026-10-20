@@ -1,0 +1,25 @@
+CENTRO MÉDICO BIENESTAR
+
+CERTIFICADO MÉDICO
+
+Paciente: Valentina Gómez Ruiz
+Edad: 29 años
+
+Médico tratante: Dr. Sebastián López
+Matrícula profesional: MP-74125
+
+Diagnóstico:
+Gastroenteritis aguda
+
+CIE-10: A09
+
+Se certifica que la paciente fue valorada en consulta médica y
+requiere reposo domiciliario durante 3 días.
+
+Indicaciones:
+Mantener hidratación, dieta blanda y reposo.
+Consultar nuevamente si presenta empeoramiento de los síntomas.
+
+Especialidad: Medicina General
+
+Prioridad: Rutina

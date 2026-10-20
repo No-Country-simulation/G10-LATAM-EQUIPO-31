@@ -1,0 +1,24 @@
+CLÍNICA SAN GABRIEL
+RECETA MÉDICA
+
+Paciente: Laura Martínez Gómez
+Edad: 45 años
+
+Médico tratante: Dr. Andrés Ramírez
+Matrícula profesional: MP-45821
+
+Diagnóstico: Hipertensión arterial esencial
+CIE-10: I10
+
+Medicamentos:
+
+1. Losartán 50 mg
+   Dosis: 1 tableta cada 12 horas durante 30 días.
+
+2. Amlodipino 5 mg
+   Dosis: 1 tableta cada 24 horas durante 30 días.
+
+Indicaciones:
+Continuar control de presión arterial y asistir a consulta de seguimiento.
+
+Prioridad: Rutina

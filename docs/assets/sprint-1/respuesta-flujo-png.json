@@ -1,0 +1,63 @@
+{
+  "status": "procesado",
+  "documento_id": "DOC-IMG-007",
+  "canal_origen": "test",
+  "nombre_archivo": "07_informe_estudio.png",
+  "tipo_contenido": "image/png",
+  "oci_object_name": "recibidos/DOC-IMG-007_07_informe_estudio.png",
+  "clasificacion": {
+    "tipo_documento": "Informe de Estudio de Diagnostico por Imagenes/Laboratorio",
+    "especialidad": "Radiología / Neumología",
+    "nivel_prioridad": "Urgente",
+    "score_confianza_clasificacion": 1,
+    "justificacion": "El documento presenta los hallazgos y el diagnóstico de una tomografía computarizada de tórax, correspondiendo claramente a un informe de estudio de diagnóstico por imágenes."
+  },
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Miguel Ángel Torres",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 63,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dra. Patricia Gómez",
+      "registro_profesional": "MP-78214",
+      "especialidad": "Radiología / Neumología",
+      "institucion": "CENTRO MÉDICO VIDA"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Tromboembolismo pulmonar agudo",
+        "codigo_cie10": "I26.9",
+        "tipo": "principal"
+      }
+    ],
+    "medicamentos": [],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [
+      {
+        "descripcion": "Tomografía computarizada de tórax con contraste",
+        "prioridad": "urgente"
+      }
+    ],
+    "nivel_urgencia": "urgente",
+    "senales_gravedad": [
+      "PRIORIDAD: URGENTE",
+      "Se observa defecto de llenado en arterias pulmonares segmentarias, compatible con tromboembolismo pulmonar agudo."
+    ],
+    "fecha_documento": null,
+    "observaciones": "Informe de estudio de tomografía computarizada de tórax con contraste.",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  },
+  "mensaje": "Documento procesado correctamente por MediFlow"
+}

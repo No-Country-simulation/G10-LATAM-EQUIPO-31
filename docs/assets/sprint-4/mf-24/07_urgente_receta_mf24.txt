@@ -1,0 +1,31 @@
+*** DOCUMENTO FICTICIO PARA PRUEBAS - NO CORRESPONDE A UN PACIENTE REAL ***
+*** Caso MF-24: receta medica con condicion de urgencia y senales de gravedad explicitas ***
+
+CLINICA DEMO MEDIFLOW
+RECETA MEDICA - URGENTE
+
+Fecha: 09/10/2026
+Tipo de documento del paciente: Cedula de identidad
+Numero de documento: 00000007
+Paciente: Roberto Salas Ficticio
+Edad: 63 anios
+Sexo: Masculino
+
+Diagnostico: Emergencia hipertensiva (I16.1)
+
+Hallazgos de gravedad en la consulta:
+- Presion arterial 220/130 mmHg, sostenida.
+- Cefalea intensa de inicio brusco y vision borrosa.
+- Dolor toracico opresivo leve.
+
+NIVEL DE URGENCIA: EMERGENCIA. Requiere atencion inmediata y traslado
+prioritario; no debe esperar la cola habitual.
+
+Indicaciones:
+1. Labetalol 20 mg por via intravenosa lenta, dosis inicial, bajo monitoreo.
+2. Amlodipino 10 mg por via oral cada 24 horas, desde el alta.
+3. Reposo absoluto hasta la evaluacion del especialista.
+
+Profesional: Dr. Ignacio Barrios Demo
+Especialidad: Medicina de urgencias
+Matricula: DEMO-0007

@@ -1,0 +1,24 @@
+*** DOCUMENTO FICTICIO PARA PRUEBAS - NO CORRESPONDE A UN PACIENTE REAL ***
+*** Caso disenado para provocar una inconsistencia clinica (receta con estudios solicitados) ***
+
+CLINICA DEMO MEDIFLOW
+RECETA MEDICA
+
+Fecha: 17/03/2026
+Tipo de documento del paciente: Cedula de identidad
+Numero de documento: 00000005
+Paciente: Sofia Lara Ficticia
+Edad: 45 anios
+Sexo: Femenino
+
+Diagnostico: Anemia ferropenica (D50.9)
+
+Indicaciones:
+1. Sulfato ferroso 300 mg, un comprimido por via oral cada 24 horas, por 60 dias.
+
+Estudios solicitados: Hemograma completo y ferritina serica.
+Control con resultados en 30 dias.
+
+Profesional: Dr. Andres Pinto Demo
+Especialidad: Hematologia
+Matricula: DEMO-0005

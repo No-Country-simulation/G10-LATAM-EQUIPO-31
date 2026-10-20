@@ -1,0 +1,70 @@
+{
+  "status": "procesado",
+  "documento_id": "DOC-PDF-006",
+  "canal_origen": "test",
+  "nombre_archivo": "06_receta_medica.pdf",
+  "tipo_contenido": "application/pdf",
+  "oci_object_name": "recibidos/DOC-PDF-006_06_receta_medica.pdf",
+  "clasificacion": {
+    "tipo_documento": "Receta Medica",
+    "especialidad": "Cardiologia",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 1,
+    "justificacion": "El documento especifica claramente el titulo Receta medica y contiene medicamentos prescritos para hipertension arterial, correspondiendo a la especialidad de Cardiologia."
+  },
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Laura Martínez Gómez",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 45,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dr. Andrés Ramírez",
+      "registro_profesional": "MP-45821",
+      "especialidad": "Cardiología",
+      "institucion": "Clínica San Gabriel"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Hipertensión arterial esencial",
+        "codigo_cie10": "I10",
+        "tipo": "principal"
+      }
+    ],
+    "medicamentos": [
+      {
+        "nombre": "Losartán",
+        "dosis": "50 mg",
+        "via_administracion": null,
+        "frecuencia": "Cada 12 horas",
+        "duracion": "30 días"
+      },
+      {
+        "nombre": "Amlodipino",
+        "dosis": "5 mg",
+        "via_administracion": null,
+        "frecuencia": "Cada 24 horas",
+        "duracion": "30 días"
+      }
+    ],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [],
+    "fecha_documento": null,
+    "observaciones": "Continuar control de presión arterial y asistir a consulta de seguimiento.",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  },
+  "mensaje": "Documento procesado correctamente por MediFlow"
+}

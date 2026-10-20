@@ -1,0 +1,188 @@
+{
+  "name": "MF-14 Alerta caso urgente MediFlow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "mediflow-urgente",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "9d1c7f10-3a52-4c1e-8b0a-1f6a2e7c0a01",
+      "name": "Webhook caso urgente",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "5b0e2a64-7c31-4d8e-9a17-3c4f8d2e6b19"
+    },
+    {
+      "parameters": {
+        "jsCode": "// MF-14: valida el evento recibido de MediFlow y arma el texto de las alertas.\n// El evento NO trae datos del paciente (ver app/services/alertas_n8n.py).\nconst evento = $input.first().json.body ?? {};\n\nconst valido =\n  evento.urgente === true &&\n  typeof evento.documento_id === 'string' &&\n  evento.documento_id.length > 0;\n\nif (!valido) {\n  return [{ json: { valido: false, documento_id: evento.documento_id ?? null } }];\n}\n\nconst limpiar = (v) => String(v ?? '—').replace(/[\\r\\n]+/g, ' ').trim() || '—';\n// Slack interpreta &, < y > como marcado: se escapan los textos que vienen del modelo.\nconst slack = (v) => limpiar(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst estado = limpiar(evento.estado);\nconst titulos = {\n  urgente: 'ALERTA URGENTE: caso urgente en cola de emergencia',\n  revision_humana: 'ALERTA URGENTE: urgente, pendiente de revisión humana',\n  error_tecnico: 'ALERTA URGENTE: urgente con fallo técnico, requiere atención manual',\n};\nconst titulo = titulos[estado] ?? `ALERTA URGENTE: caso urgente (destino: ${estado})`;\n\nconst aviso = {\n  revision_humana: 'Este caso NO fue validado automáticamente: un auditor debe revisarlo en el panel de revisión humana.',\n  error_tecnico: 'El procesamiento terminó con un fallo técnico: revisar el caso manualmente.',\n}[estado] ?? null;\n\nconst senales = Array.isArray(evento.senales_gravedad) && evento.senales_gravedad.length\n  ? evento.senales_gravedad.join('; ')\n  : '—';\n\nconst lineas = [\n  ['Documento', evento.documento_id],\n  ['Destino', estado],\n  ['Tipo de documento', evento.tipo_documento],\n  ['Especialidad', evento.especialidad],\n  ['Nivel de urgencia', evento.nivel_urgencia],\n  ['Confianza', evento.categoria_confianza],\n  ['Señales de gravedad', senales],\n  ['Registrado', evento.timestamp],\n];\n\nconst texto = [titulo, '', ...lineas.map(([k, v]) => `${k}: ${limpiar(v)}`), ...(aviso ? ['', aviso] : [])].join('\\n');\nconst slack_texto = [\n  `:rotating_light: *${slack(titulo)}*`,\n  ...lineas.map(([k, v]) => `• ${k}: ${k === 'Documento' ? '`' + slack(v) + '`' : slack(v)}`),\n  ...(aviso ? ['', `_${slack(aviso)}_`] : []),\n].join('\\n');\nconst asunto = `[MediFlow] ${titulo} - ${limpiar(evento.documento_id)}`;\n\nreturn [{ json: { valido: true, documento_id: evento.documento_id, estado, asunto, texto, slack_texto } }];\n"
+      },
+      "id": "9d1c7f10-3a52-4c1e-8b0a-1f6a2e7c0a02",
+      "name": "Validar y armar mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b3a1c2d4-0000-4000-8000-000000000001",
+              "leftValue": "={{ $json.valido }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9d1c7f10-3a52-4c1e-8b0a-1f6a2e7c0a03",
+      "name": "Evento valido y urgente",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "mediflow-alertas-urgentes",
+          "mode": "name"
+        },
+        "text": "={{ $json.slack_texto }}",
+        "otherOptions": {}
+      },
+      "id": "9d1c7f10-3a52-4c1e-8b0a-1f6a2e7c0a04",
+      "name": "Slack alerta",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        740,
+        100
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "fromEmail": "mediflow-alertas@example.com",
+        "toEmail": "equipo-mediflow@example.com",
+        "subject": "={{ $json.asunto }}",
+        "emailFormat": "text",
+        "text": "={{ $json.texto }}",
+        "options": {}
+      },
+      "id": "9d1c7f10-3a52-4c1e-8b0a-1f6a2e7c0a05",
+      "name": "Email alerta",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        740,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {},
+      "id": "9d1c7f10-3a52-4c1e-8b0a-1f6a2e7c0a06",
+      "name": "Ignorar evento no valido",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        740,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "content": "MF-14 - Alerta de casos urgentes de MediFlow\n\nAntes de activar:\n1. Webhook: asignar una credencial Header Auth (header X-MediFlow-Token, valor = N8N_ALERT_WEBHOOK_TOKEN de MediFlow).\n2. Slack: asignar credencial y ajustar el canal (el bot debe estar invitado al canal).\n3. Email: asignar credencial SMTP y ajustar remitente y destinatarios.\n4. Activar el workflow y configurar en MediFlow N8N_ALERT_WEBHOOK_URL con la URL de PRODUCCION del webhook.\n\nSlack y Email tienen 'On Error: Continue': si un canal falla, el otro igual se envia. Ver docs/MF-14-alertas-n8n.md.",
+        "height": 360,
+        "width": 460
+      },
+      "id": "9d1c7f10-3a52-4c1e-8b0a-1f6a2e7c0a07",
+      "name": "Nota MF-14",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -20,
+        -260
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook caso urgente": {
+      "main": [
+        [
+          {
+            "node": "Validar y armar mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar y armar mensaje": {
+      "main": [
+        [
+          {
+            "node": "Evento valido y urgente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento valido y urgente": {
+      "main": [
+        [
+          {
+            "node": "Slack alerta",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email alerta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignorar evento no valido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

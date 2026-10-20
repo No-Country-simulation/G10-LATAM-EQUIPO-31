@@ -1,0 +1,35 @@
+# MediFlow - Entorno base
+# Python 3.11
+
+# API / Ingesta
+fastapi==0.141.1
+uvicorn[standard]
+python-multipart==0.0.32
+
+# Interfaz
+streamlit==1.64.0
+
+# Validacion / Configuracion
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.2.3
+pytest
+
+# Orquestacion
+langgraph==1.2.11
+
+# Proveedores LLM
+google-genai==2.24.0
+groq==1.7.0           # MF-19: proveedor de fallback tecnico (qwen/qwen3.8-27b)
+pymupdf==1.28.2        # MF-19: rasteriza PDF a imagen para el fallback de Groq (no procesa PDF nativo)
+
+
+# OCI Object Storage
+oci==2.186.0
+
+# HTTP
+httpx==0.28.1
+requests  # MF-12: cliente HTTP del panel HITL (frontend/)
+
+# Testing
+pytest==8.3.4

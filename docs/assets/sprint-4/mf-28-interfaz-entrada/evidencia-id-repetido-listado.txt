@@ -1,0 +1,7 @@
+﻿Listado del bucket (PRUEBA-KATE-010 y PRUEBA-KATE-015), obtenido con OCIStorageService.listar:
+
+recibidos/PRUEBA-KATE-010_19mb.pdf
+recibidos/PRUEBA-KATE-010_receta.png
+recibidos/PRUEBA-KATE-015_19mb.pdf
+procesados/estandar/PRUEBA-KATE-010.json
+procesados/revision_humana/PRUEBA-KATE-010.json

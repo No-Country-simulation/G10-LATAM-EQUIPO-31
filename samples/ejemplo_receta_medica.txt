@@ -1,0 +1,7 @@
+RECETA MEDICA (dato sintetico, uso interno de pruebas)
+
+Paciente: Ana Torres (ficticio)
+Medico: Dr. Luis Ramirez - Matricula 12345
+Diagnostico: Faringitis aguda
+Medicamento: Amoxicilina 500mg
+Dosis: 1 comprimido cada 8 horas por 7 dias

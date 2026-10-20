@@ -1,0 +1,62 @@
+{
+  "status": "procesado",
+  "documento_id": "DOC-IMG-008",
+  "canal_origen": "test",
+  "nombre_archivo": "08_orden_procedimiento.jpg",
+  "tipo_contenido": "image/jpeg",
+  "oci_object_name": "recibidos/DOC-IMG-008_08_orden_procedimiento.jpg",
+  "clasificacion": {
+    "tipo_documento": "Orden de Solicitud de Procedimiento",
+    "especialidad": "Cirugía General",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 1,
+    "justificacion": "El documento es claramente una orden de procedimiento para una colecistectomia laparoscopica dentro de la especialidad de Cirugia General."
+  },
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Daniela Rodríguez Pérez",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 38,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dr. Felipe Mendoza",
+      "registro_profesional": "MP-61347",
+      "especialidad": "Cirugía General",
+      "institucion": "Hospital Santa María"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Colelitiasis sin colecistitis",
+        "codigo_cie10": "K80.2",
+        "tipo": "principal"
+      }
+    ],
+    "medicamentos": [],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [
+      {
+        "descripcion": "Colecistectomía laparoscópica",
+        "prioridad": "rutina"
+      }
+    ],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [
+      "PRIORIDAD: RUTINA"
+    ],
+    "fecha_documento": null,
+    "observaciones": "Programar valoración prequirúrgica antes del procedimiento.",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  },
+  "mensaje": "Documento procesado correctamente por MediFlow"
+}

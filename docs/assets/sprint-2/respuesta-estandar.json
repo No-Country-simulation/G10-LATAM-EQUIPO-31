@@ -1,0 +1,75 @@
+{
+  "status": "procesado",
+  "documento_id": "TEST-MF20-FINAL-ESTANDAR",
+  "canal_origen": "api",
+  "nombre_archivo": "01_receta_medica.txt",
+  "tipo_contenido": "text/plain",
+  "oci_object_name": "recibidos/TEST-MF20-FINAL-ESTANDAR_01_receta_medica.txt",
+  "estado": "estandar",
+  "persistencia_ok": true,
+  "oci_object_name_resultado": "procesados/estandar/TEST-MF20-FINAL-ESTANDAR.json",
+  "historial_ok": true,
+  "oci_object_name_historial": "historial/TEST-MF20-FINAL-ESTANDAR/20261001T193505332748.json",
+  "clasificacion": {
+    "tipo_documento": "Receta Medica",
+    "especialidad": "Cardiologia",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 1,
+    "justificacion": "El documento es una receta medica emitida por el Dr. Andres Ramirez que prescribe medicamentos para el tratamiento de hipertension arterial esencial, especificando dosis y duracion."
+  },
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Laura Martínez Gómez",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 45,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dr. Andrés Ramírez",
+      "registro_profesional": "MP-45821",
+      "especialidad": "Cardiologia",
+      "institucion": "CLÍNICA SAN GABRIEL"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Hipertensión arterial esencial",
+        "codigo_cie10": "I10",
+        "tipo": "principal"
+      }
+    ],
+    "medicamentos": [
+      {
+        "nombre": "Losartán",
+        "dosis": "50 mg",
+        "via_administracion": null,
+        "frecuencia": "cada 12 horas",
+        "duracion": "30 días"
+      },
+      {
+        "nombre": "Amlodipino",
+        "dosis": "5 mg",
+        "via_administracion": null,
+        "frecuencia": "cada 24 horas",
+        "duracion": "30 días"
+      }
+    ],
+    "estudios_solicitados": [],
+    "procedimientos_solicitados": [],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [],
+    "fecha_documento": null,
+    "observaciones": "Continuar control de presión arterial y asistir a consulta de seguimiento.",
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  },
+  "mensaje": "Documento procesado correctamente por MediFlow"
+}

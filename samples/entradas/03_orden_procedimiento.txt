@@ -1,0 +1,25 @@
+HOSPITAL SANTA MARÍA
+
+ORDEN DE SOLICITUD DE PROCEDIMIENTO
+
+Paciente: Daniela Rodríguez Pérez
+Edad: 38 años
+
+Médico solicitante: Dr. Felipe Mendoza
+Matrícula profesional: MP-61347
+
+Diagnóstico:
+Colelitiasis sin colecistitis
+
+CIE-10: K80.2
+
+Procedimiento solicitado:
+Colecistectomía laparoscópica
+
+Especialidad:
+Cirugía General
+
+Indicaciones:
+Programar valoración prequirúrgica antes del procedimiento.
+
+Prioridad: Rutina

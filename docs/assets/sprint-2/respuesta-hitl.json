@@ -1,0 +1,75 @@
+{
+  "status": "procesado",
+  "documento_id": "TEST-MF20-FINAL-HITL",
+  "canal_origen": "api",
+  "nombre_archivo": "09_receta_inconsistente_hitl.txt",
+  "tipo_contenido": "text/plain",
+  "oci_object_name": "recibidos/TEST-MF20-FINAL-HITL_09_receta_inconsistente_hitl.txt",
+  "estado": "revision_humana",
+  "persistencia_ok": true,
+  "oci_object_name_resultado": "procesados/revision_humana/TEST-MF20-FINAL-HITL.json",
+  "historial_ok": true,
+  "oci_object_name_historial": "historial/TEST-MF20-FINAL-HITL/20261001T200445308080.json",
+  "clasificacion": {
+    "tipo_documento": "Receta Medica",
+    "especialidad": "Cardiología",
+    "nivel_prioridad": "Rutina",
+    "score_confianza_clasificacion": 0.95,
+    "justificacion": "El documento esta explicitamente titulado como 'RECETA MEDICA', incluye prescripcion de medicamentos (Losartan) para el diagnostico de hipertension arterial, y esta firmado por un medico tratante."
+  },
+  "extraccion": {
+    "paciente": {
+      "nombre_completo": "Carlos Andrés Martínez",
+      "tipo_documento": null,
+      "numero_documento": null,
+      "edad": 52,
+      "sexo": null
+    },
+    "profesional": {
+      "nombre_completo": "Dra. Laura Fernández",
+      "registro_profesional": "MP-85241",
+      "especialidad": "Cardiología",
+      "institucion": "CENTRO MÉDICO VIDA"
+    },
+    "diagnosticos": [
+      {
+        "descripcion": "Hipertensión arterial",
+        "codigo_cie10": "I10",
+        "tipo": "principal"
+      }
+    ],
+    "medicamentos": [
+      {
+        "nombre": "Losartán 50 mg",
+        "dosis": "1 tableta",
+        "via_administracion": null,
+        "frecuencia": "cada 12 horas",
+        "duracion": "30 días"
+      }
+    ],
+    "estudios_solicitados": [
+      {
+        "tipo": "Tomografía computarizada",
+        "descripcion": "Tomografía computarizada de tórax con contraste",
+        "prioridad": "Rutina"
+      }
+    ],
+    "procedimientos_solicitados": [],
+    "nivel_urgencia": "no_urgente",
+    "senales_gravedad": [],
+    "fecha_documento": null,
+    "observaciones": null,
+    "campos_no_encontrados": [
+      "paciente.tipo_documento",
+      "paciente.numero_documento",
+      "paciente.sexo",
+      "medicamentos[0].via_administracion",
+      "fecha_documento"
+    ]
+  },
+  "validacion": {
+    "validacion_ok": true,
+    "errores_validacion": []
+  },
+  "mensaje": "Documento procesado correctamente por MediFlow"
+}

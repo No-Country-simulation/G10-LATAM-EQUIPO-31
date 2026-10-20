@@ -1,0 +1,36 @@
+HOSPITAL CENTRAL
+
+EPICRISIS / INFORME DE ALTA
+
+Paciente: José Antonio Herrera
+Edad: 67 años
+
+Médico tratante: Dra. Carolina Méndez
+Matrícula profesional: MP-52981
+
+Fecha de ingreso: 15/09/2026
+Fecha de alta: 18/09/2026
+
+Diagnóstico principal:
+Neumonía bacteriana
+
+CIE-10: J15.9
+
+Resumen clínico:
+Paciente ingresó por fiebre, tos productiva y dificultad respiratoria.
+Durante la hospitalización presentó evolución clínica favorable luego
+del tratamiento indicado.
+
+Medicamentos al alta:
+
+1. Amoxicilina con ácido clavulánico 875/125 mg
+   Dosis: 1 tableta cada 12 horas durante 7 días.
+
+Indicaciones:
+Continuar tratamiento en domicilio.
+Control por Medicina Interna en 7 días.
+Acudir a urgencias ante dificultad respiratoria o fiebre persistente.
+
+Especialidad: Medicina Interna
+
+Prioridad: Rutina
