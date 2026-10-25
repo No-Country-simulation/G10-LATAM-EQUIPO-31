@@ -55,14 +55,14 @@ MediFlow está desplegado en dos partes:
 | Interfaz (Streamlit): carga, consulta y revisión humana | Streamlit Community Cloud | https://mediflow-g10-equipo31.streamlit.app |
 | API (FastAPI) | Render | https://mediflow-api-test.onrender.com/docs |
 
-**Video de demostración:** https://youtu.be/bXamIpZETGY
+**Video de demostración:**  https://youtu.be/s88JQiqFVXk
 
 - La interfaz se conecta con la API mediante la variable `MEDIFLOW_API_URL`.
 - Las claves (Gemini, Groq, OCI y n8n) se cargan como variables de entorno en cada plataforma y no se guardan en el repositorio. Ver [.env.example](.env.example).
 - La API no tiene página de inicio. Su documentación interactiva está en `/docs`.
 - Render, en su plan gratuito, apaga el servidor cuando no se usa. La primera carga puede tardar hasta un minuto.
 
-## Tecnologías definidas
+## Tecnologías y herramientas utilizadas
 
 - Python 3.11
 - FastAPI — ingesta y API REST
@@ -75,6 +75,9 @@ MediFlow está desplegado en dos partes:
 - Streamlit — interfaz de carga y consulta, y panel de revisión humana (HITL)
 - n8n — workflow de alertas de casos urgentes (aviso por Slack y correo)
 - Pytest — pruebas automatizadas
+- Render — despliegue y alojamiento de la API desarrollada con FastAPI.
+- Streamlit Community Cloud — despliegue y alojamiento de la interfaz web de carga, consulta y revisión humana
+
 
 ## Estructura del repositorio
 
@@ -100,7 +103,13 @@ G10-LATAM-EQUIPO-31/
 
 `app/services/oci_storage_service.py` — servicio de conexión con OCI Object Storage: carga y recuperación de documentos originales (MF-04), persistencia del resultado del flujo por estado (MF-13, ver [docs/persistencia-resultados.md](docs/persistencia-resultados.md)), registro del historial de trazabilidad por documento (MF-15, ver [docs/historial-triaje.md](docs/historial-triaje.md)), y métodos para consultar y registrar decisiones de revisión humana sin sobrescribir datos: `listar`, `leer_json` y `escribir_json_nuevo` (MF-12, ver [docs/MF-12-hitl-review.md](docs/MF-12-hitl-review.md)).
 
-## Configuración inicial del entorno
+## Ejecución local — Configuración del entorno
+
+Las siguientes instrucciones están dirigidas a quienes deseen ejecutar MediFlow localmente para desarrollo, pruebas o revisión técnica.
+
+Si solo deseas probar la aplicación, puedes acceder directamente a la [versión desplegada](#versión-desplegada), sin instalar dependencias ni configurar el entorno local.
+
+Para ejecutar el proyecto localmente, sigue primero los pasos de configuración y luego utiliza cualquiera de las opciones descritas a continuación.
 
 1. Verificar que tenés Python 3.11 instalado.
 2. Crear y activar un entorno virtual:
@@ -118,7 +127,7 @@ G10-LATAM-EQUIPO-31/
    cp .env.example .env
    ```
 
-## Cómo procesar un documento desde Swagger
+## Cómo procesar un documento desde Swagger (entorno local)
 
 Con el `.env` completo y la API en marcha (`python -m uvicorn main:app --port 8000`):
 
@@ -132,7 +141,7 @@ Con el `.env` completo y la API en marcha (`python -m uvicorn main:app --port 80
 
 La respuesta indica el `estado` del documento (`estandar`, `urgente` o `revision_humana`), si el resultado y el historial se guardaron en OCI (`persistencia_ok` e `historial_ok`) y el detalle de la clasificación, la extracción y la validación. Los documentos derivados a `revision_humana` se resuelven desde el panel de revisión humana.
 
-## Cómo ejecutar la interfaz de carga y consulta
+## Cómo ejecutar la interfaz de carga y consulta localmente
 
 Con el `.env` completo (claves de Gemini y credenciales de OCI), desde la raíz del repositorio y en dos terminales:
 
@@ -151,7 +160,7 @@ La interfaz necesita la API en marcha: si está apagada, muestra un aviso de fal
 
 Detalle en [docs/MF-28-interfaz-amigable-de-entrada.md](docs/MF-28-interfaz-amigable-de-entrada.md).
 
-## Cómo ejecutar el panel de revisión humana
+## Cómo ejecutar el panel de revisión humana localmente
 
 Con el `.env` completo (claves de Gemini y credenciales de OCI), desde la raíz del repositorio y en dos terminales:
 
