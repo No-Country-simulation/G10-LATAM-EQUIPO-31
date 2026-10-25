@@ -289,4 +289,4 @@ Para el video del Demo Day se usaron [`08_orden_procedimiento.jpg`](samples/entr
 
 **Hallazgos MF-32 y MF-35:** se cerraron como **limitaciones conocidas del MVP**, sin cambios de código. Ver [Alcance y limitaciones conocidas del MVP](#alcance-y-limitaciones-conocidas-del-mvp).
 
-**Semana 5 (cierre del proyecto):** se desplegó la versión final (ver [Versión desplegada](#versión-desplegada)), se actualizaron la documentación y el diagrama de arquitectura, y se grabó el video de demostración. Quedan pendientes la integración de `develop` en `main` y la presentación del Demo Day.
+**Semana 5 (cierre del proyecto):** se desplegó la versión final (ver [Versión desplegada](#versión-desplegada)), se actualizaron la documentación y el diagrama de arquitectura, y se grabó el video de demostración. La presentación del Demo Day queda programada como actividad de cierre.
