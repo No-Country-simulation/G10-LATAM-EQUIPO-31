@@ -50,7 +50,17 @@ MediFlow deriva a revisión humana los casos que **detecta** como dudosos: confi
 
 ## Versión desplegada
 
-La URL de la versión desplegada se publicará cuando `develop` se integre a `main` y el despliegue en Render quede configurado.
+MediFlow está desplegado en dos partes:
+
+| Componente | Plataforma | Enlace |
+|---|---|---|
+| Interfaz (Streamlit): carga, consulta y revisión humana | Streamlit Community Cloud | https://mediflow-g10-equipo31.streamlit.app |
+| API (FastAPI) | Render | https://mediflow-api-test.onrender.com/docs |
+
+- La interfaz se conecta con la API mediante la variable `MEDIFLOW_API_URL`.
+- Las claves (Gemini, Groq, OCI y n8n) se cargan como variables de entorno en cada plataforma y no se guardan en el repositorio. Ver [.env.example](.env.example).
+- La API no tiene página de inicio. Su documentación interactiva está en `/docs`.
+- Render, en su plan gratuito, apaga el servidor cuando no se usa. La primera carga puede tardar hasta un minuto.
 
 ## Tecnologías definidas
 
