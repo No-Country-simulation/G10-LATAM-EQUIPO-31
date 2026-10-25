@@ -2,8 +2,6 @@
 
 Sistema inteligente para procesamiento y triaje de documentos clínicos.
 
-Proyecto desarrollado para Hackathon ONE G10.
-
 ## Descripción general del proyecto
 
 MediFlow es un sistema inteligente basado en agentes de IA para el triaje, extracción y enrutamiento de documentos clínicos. El sistema recibe documentos clínicos y administrativos en distintos formatos (PDF, imagen o texto), los clasifica automáticamente, extrae los datos esenciales con un LLM multimodal, y los enruta al destino correcto según su nivel de urgencia y confianza de extracción — sin intervención humana manual para los casos estándar.
@@ -76,6 +74,7 @@ MediFlow está desplegado en dos partes:
 - OCI Object Storage — almacenamiento de documentos originales, resultados por destino e historial de trazabilidad
 - Streamlit — interfaz de carga y consulta, y panel de revisión humana (HITL)
 - n8n — workflow de alertas de casos urgentes (aviso por Slack y correo)
+- Pytest — pruebas automatizadas
 
 ## Estructura del repositorio
 
@@ -89,6 +88,7 @@ G10-LATAM-EQUIPO-31/
 │   ├── services/        # Servicios externos (OCI, LLM, etc.)
 │   └── config/           # Configuración del proyecto
 ├── frontend/               # Interfaz de carga y consulta, y panel de revisión humana (Streamlit)
+├── n8n/                    # Workflow de alertas de casos urgentes (n8n)
 ├── tests/                 # Pruebas automatizadas
 ├── samples/                # Casos de prueba / documentos de ejemplo
 ├── docs/                     # Documentación y diagramas
@@ -282,9 +282,11 @@ Al cierre de la etapa de desarrollo del Sprint 4 (16/10/2026) quedaron integrada
 
 **Documentos definitivos de la demo (MF-29):** `01_receta_medica.txt` (flujo estándar), `02_informe_estudio.txt` (flujo urgente) y `09_receta_inconsistente_hitl.txt` (revisión humana). Además, se validaron con pruebas satisfactorias `06_receta_medica.pdf` (flujo estándar, PDF) y `08_orden_procedimiento.jpg` (flujo estándar, imagen), documentadas en [docs/MF-29-seleccion-documentos-definitivos.md](docs/MF-29-seleccion-documentos-definitivos.md) y [docs/MF-26-pruebas-validacion-hallazgos.md](docs/MF-26-pruebas-validacion-hallazgos.md).
 
+Para el video del Demo Day se usaron [`08_orden_procedimiento.jpg`](samples/entradas/08_orden_procedimiento.jpg) (flujo estándar, imagen), [`02_informe_estudio.txt`](samples/entradas/02_informe_estudio.txt) (flujo urgente) y [`caso-ambiguo.pdf`](docs/assets/mf-16/caso-ambiguo.pdf) (revisión humana).
+
 - **Pruebas automatizadas:** 361 aprobadas en la validación de integración del Sprint 4 (MF-31).
 - **Evidencias:** el detalle de los escenarios validados se documenta en [docs/evidencias-sprint-4.md](docs/evidencias-sprint-4.md).
 
 **Hallazgos MF-32 y MF-35:** se cerraron como **limitaciones conocidas del MVP**, sin cambios de código. Ver [Alcance y limitaciones conocidas del MVP](#alcance-y-limitaciones-conocidas-del-mvp).
 
-**Semana 5 (cierre del proyecto):** consolidación de `develop` en `main`, despliegue de la versión final, actualización de la documentación y del diagrama de arquitectura, video del entregable y preparación del Demo Day.
+**Semana 5 (cierre del proyecto):** se desplegó la versión final (ver [Versión desplegada](#versión-desplegada)), se actualizaron la documentación y el diagrama de arquitectura, y se grabó el video de demostración. Quedan pendientes la integración de `develop` en `main` y la presentación del Demo Day.
